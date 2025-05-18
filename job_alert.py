@@ -4,10 +4,9 @@ import time
 import os
 from datetime import datetime
 
-
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
-
 SEEN_JOBS_FILE = "seen_jobs.txt"
+FILTERED_LOG_FILE = "filtered_jobs.log"
 
 SEARCH_TERMS = [
     "cybersecurity",
@@ -23,25 +22,21 @@ SEARCH_TERMS = [
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
 PLATFORMS = ["linkedin", "indeed", "google"]
 
-# ✅ Title whitelist: only these keywords must be present
 REQUIRED_TITLE_KEYWORDS = [
     "cyber", "security", "soc", "grc", "infosec", "threat", "incident response",
     "vulnerability", "detection", "cloud security", "security analyst", "security engineer",
     "malware", "siem", "log analysis", "risk", "appsec", "devsecops"
 ]
 
-# ❌ Title-based rejection (senior/manager)
 REJECT_IF_TITLE_CONTAINS = [
     "senior", "manager", "lead", "director", "principal", "architect",
     "vp", "vice president", "chief", "head of", "operations manager"
 ]
 
-# ❌ Description-based rejection
 REJECT_IF_DESCRIPTION_CONTAINS = [
     "us citizen", "u.s. citizen", "must be a us citizen", "must be a U.S. citizen", "only us citizens",
     "citizenship required", "security clearance", "ts/sci", "ts / sci", "polygraph", "top secret", "clearance required",
     "iat level ii", "t1 public trust", "public trust",
-
     "3+ years", "4+ years", "5+ years", "6+ years", "7+ years", "8+ years", "9+ years", "10+ years",
     "three years", "four years", "five years", "six years", "seven years", "eight years", "nine years", "ten years",
     "3 years of experience", "4 years of experience", "5 years of experience", "8 years of experience",
@@ -49,7 +44,6 @@ REJECT_IF_DESCRIPTION_CONTAINS = [
     "at least 3 years", "at least 4 years", "at least 5 years", "minimum of 3 years", "minimum of 4 years",
     "minimum of 6 years", "minimum of 7 years", "minimum of 8 years",
     "6 years of professional experience", "7 years of professional experience", "8 years of professional experience",
-
     "2-4 years", "2 - 4 years", "2–4 years", "2 – 4 years",
     "3-5 years", "3 - 5 years", "3–5 years", "3 – 5 years",
     "4-6 years", "4 - 6 years", "4–6 years", "4 – 6 years",
@@ -69,6 +63,7 @@ else:
 
 all_new_jobs = []
 filtered_out_count = 0
+filtered_log_entries = []
 
 # 🔍 Scrape loop
 for term in SEARCH_TERMS:
@@ -95,19 +90,20 @@ for term in SEARCH_TERMS:
                 title = job.get("title", "").lower()
                 description_raw = job.get("description")
                 description = description_raw.lower() if isinstance(description_raw, str) else ""
+                job_info = f"{job.get('title', 'No Title')} at {job.get('company', 'No Company')} ({url})"
 
-                # ✅ Whitelist: must contain at least 1 required keyword
                 if not any(kw in title for kw in REQUIRED_TITLE_KEYWORDS):
+                    filtered_log_entries.append(f"[TITLE-WHITELIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
-                # ❌ Title blacklist
                 if any(bad in title for bad in REJECT_IF_TITLE_CONTAINS):
+                    filtered_log_entries.append(f"[TITLE-BLACKLIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
-                # ❌ Description blacklist
                 if any(bad in description for bad in REJECT_IF_DESCRIPTION_CONTAINS):
+                    filtered_log_entries.append(f"[DESC-BLACKLIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
@@ -145,6 +141,13 @@ else:
 with open(SEEN_JOBS_FILE, "a") as f:
     for job in all_new_jobs:
         f.write(job["job_url"] + "\n")
+
+# 📁 Save filtered job log
+if filtered_log_entries:
+    with open(FILTERED_LOG_FILE, "a") as log_file:
+        log_file.write(f"\n🕐 Run at {timestamp} — {len(filtered_log_entries)} jobs filtered:\n")
+        for entry in filtered_log_entries:
+            log_file.write(entry + "\n")
 
 # ✅ Console summary
 print(f"✅ {len(all_new_jobs)} jobs posted to Slack.")
