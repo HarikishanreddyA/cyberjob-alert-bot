@@ -7,7 +7,7 @@ on:
 
 jobs:
   run-script:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -15,8 +15,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
-
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -26,4 +25,6 @@ jobs:
       - name: Run job_alert.py
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python job_alert.py
+{{ secrets.SLACK_WEBHOOK_URL }}
         run: python job_alert.py
