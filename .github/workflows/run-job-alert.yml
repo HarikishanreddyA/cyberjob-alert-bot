@@ -26,5 +26,4 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: python job_alert.py
-{{ secrets.SLACK_WEBHOOK_URL }}
-        run: python job_alert.py
+
