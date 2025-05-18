@@ -4,7 +4,9 @@ import time
 import os
 from datetime import datetime
 
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
 SEEN_JOBS_FILE = "seen_jobs.txt"
 
 SEARCH_TERMS = [
