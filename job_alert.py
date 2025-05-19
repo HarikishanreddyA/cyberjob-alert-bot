@@ -20,7 +20,7 @@ SEARCH_TERMS = [
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
-PLATFORMS = ["linkedin", "indeed", "google"]
+PLATFORMS = ["linkedin"]
 
 REQUIRED_TITLE_KEYWORDS = [
     "cyber", "security", "soc", "grc", "infosec", "threat", "incident response",
