@@ -2,21 +2,16 @@ from jobspy import scrape_jobs
 import requests
 import time
 import os
+import re
 from datetime import datetime
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL") or "https://hooks.slack.com/services/REPLACE/THIS/WEBHOOK"
 SEEN_JOBS_FILE = "seen_jobs.txt"
 FILTERED_LOG_FILE = "filtered_jobs.log"
 
 SEARCH_TERMS = [
-    "cybersecurity",
-    "security engineer",
-    "SOC analyst",
-    "information security",
-    "GRC analyst",
-    "cloud security",
-    "junior security analyst",
-    "infosec"
+    "cybersecurity", "security engineer", "SOC analyst", "information security",
+    "GRC analyst", "cloud security", "junior security analyst", "infosec"
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
@@ -37,24 +32,25 @@ REJECT_IF_DESCRIPTION_CONTAINS = [
     "us citizen", "u.s. citizen", "must be a us citizen", "must be a U.S. citizen", "only us citizens",
     "citizenship required", "security clearance", "ts/sci", "ts / sci", "polygraph", "top secret", "clearance required",
     "iat level ii", "t1 public trust", "public trust",
-    "3+ years", "4+ years", "5+ years", "6+ years", "7+ years", "8+ years", "9+ years", "10+ years",
-    "three years", "four years", "five years", "six years", "seven years", "eight years", "nine years", "ten years",
-    "3 years of experience", "4 years of experience", "5 years of experience", "8 years of experience",
-    "experience: 3 years", "experience: 4 years", "experience: 5 years", "experience: 8 years",
-    "at least 3 years", "at least 4 years", "at least 5 years", "minimum of 3 years", "minimum of 4 years",
-    "minimum of 6 years", "minimum of 7 years", "minimum of 8 years",
-    "6 years of professional experience", "7 years of professional experience", "8 years of professional experience",
-    "2-4 years", "2 - 4 years", "2–4 years", "2 – 4 years",
-    "3-5 years", "3 - 5 years", "3–5 years", "3 – 5 years",
-    "4-6 years", "4 - 6 years", "4–6 years", "4 – 6 years",
-    "5-8 years", "5 - 8 years", "5–8 years", "5 – 8 years",
-    "2 to 4 years", "3 to 5 years", "4 to 6 years", "5 to 8 years",
-    "2-7 years", "2 – 7 years", "2 to 7 years",
-    "years of experience required", "years’ experience required",
-    "senior level", "senior-level", "experienced professional"
 ]
 
-# Load seen jobs
+# ✅ Regex patterns for experience filtering
+EXPERIENCE_PATTERNS = [
+    r"\b(3|[4-9]|\d{2,})\+?\s*(years|yrs)\b",
+    r"\b(3|[4-9]|\d{2,})\s*(to|–|-)\s*\d+\s*(years|yrs)\b",
+    r"\b(three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(years|yrs)\b",
+    r"\b(3|[4-9]|\d{2,})\+?\s*years?\s+.*(experience|working|background)"
+]
+
+def has_too_much_experience(description):
+    if not description:
+        return False
+    for pattern in EXPERIENCE_PATTERNS:
+        if re.search(pattern, description, re.IGNORECASE):
+            return True
+    return False
+
+# ✅ Load seen jobs
 if os.path.exists(SEEN_JOBS_FILE):
     with open(SEEN_JOBS_FILE, "r") as f:
         seen_jobs = set(line.strip() for line in f)
@@ -62,8 +58,8 @@ else:
     seen_jobs = set()
 
 all_new_jobs = []
-filtered_out_count = 0
 filtered_log_entries = []
+filtered_out_count = 0
 
 # 🔍 Scrape loop
 for term in SEARCH_TERMS:
@@ -79,6 +75,8 @@ for term in SEARCH_TERMS:
                 experience_level=EXPERIENCE_LEVELS,
                 country_indeed="USA",
                 remote_only=False,
+                easy_apply=False,
+                linkedin_fetch_description=True,
                 verbose=0
             )
 
@@ -92,6 +90,7 @@ for term in SEARCH_TERMS:
                 description = description_raw.lower() if isinstance(description_raw, str) else ""
                 job_info = f"{job.get('title', 'No Title')} at {job.get('company', 'No Company')} ({url})"
 
+                # ✅ Filter rules
                 if not any(kw in title for kw in REQUIRED_TITLE_KEYWORDS):
                     filtered_log_entries.append(f"[TITLE-WHITELIST] ❌ {job_info}")
                     filtered_out_count += 1
@@ -104,6 +103,11 @@ for term in SEARCH_TERMS:
 
                 if any(bad in description for bad in REJECT_IF_DESCRIPTION_CONTAINS):
                     filtered_log_entries.append(f"[DESC-BLACKLIST] ❌ {job_info}")
+                    filtered_out_count += 1
+                    continue
+
+                if has_too_much_experience(description):
+                    filtered_log_entries.append(f"[EXP-REGEX] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
