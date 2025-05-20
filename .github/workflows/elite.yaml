@@ -22,10 +22,8 @@ jobs:
           pip install --upgrade pip
           pip install git+https://github.com/speedyapply/JobSpy.git requests
 
-      - name: Run job_alert.py
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        run: python job_alert.py
+      - name: Run elite_companies.py
+        run: python elite_companies.py
 
       - name: Commit seen and filtered logs
         run: |
