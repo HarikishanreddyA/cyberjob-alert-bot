@@ -5,7 +5,7 @@ import os
 import re
 from datetime import datetime
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL") or "https://hooks.slack.com/services/REPLACE/THIS/WEBHOOK"
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL") 
 SEEN_JOBS_FILE = "seen_jobs.txt"
 FILTERED_LOG_FILE = "filtered_jobs.log"
 
