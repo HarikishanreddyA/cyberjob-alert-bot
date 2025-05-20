@@ -34,7 +34,6 @@ REJECT_IF_DESCRIPTION_CONTAINS = [
     "iat level ii", "t1 public trust", "public trust",
 ]
 
-# ✅ Regex patterns for experience filtering
 EXPERIENCE_PATTERNS = [
     r"\b(3|[4-9]|\d{2,})\+?\s*(years|yrs)\b",
     r"\b(3|[4-9]|\d{2,})\s*(to|–|-)\s*\d+\s*(years|yrs)\b",
@@ -50,7 +49,7 @@ def has_too_much_experience(description):
             return True
     return False
 
-# ✅ Load seen jobs
+# Load seen jobs
 if os.path.exists(SEEN_JOBS_FILE):
     with open(SEEN_JOBS_FILE, "r") as f:
         seen_jobs = set(line.strip() for line in f)
@@ -61,7 +60,7 @@ all_new_jobs = []
 filtered_log_entries = []
 filtered_out_count = 0
 
-# 🔍 Scrape loop
+# Scrape loop
 for term in SEARCH_TERMS:
     for site in PLATFORMS:
         try:
@@ -89,6 +88,12 @@ for term in SEARCH_TERMS:
                 description_raw = job.get("description")
                 description = description_raw.lower() if isinstance(description_raw, str) else ""
                 job_info = f"{job.get('title', 'No Title')} at {job.get('company', 'No Company')} ({url})"
+
+                # 🚫 Easy Apply jobs (extra check)
+                if job.get("easy_apply", False):
+                    filtered_log_entries.append(f"[EASY-APPLY] ❌ {job_info}")
+                    filtered_out_count += 1
+                    continue
 
                 # ✅ Filter rules
                 if not any(kw in title for kw in REQUIRED_TITLE_KEYWORDS):
@@ -120,7 +125,7 @@ for term in SEARCH_TERMS:
             print(f"❌ Error scraping site '{site}' for term '{term}': {e}")
             continue
 
-# 📤 Send to Slack
+# Send to Slack
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
 if not all_new_jobs:
@@ -141,18 +146,18 @@ else:
         requests.post(SLACK_WEBHOOK_URL, json={"text": message})
         time.sleep(1)
 
-# 💾 Save seen jobs
+# Save seen jobs
 with open(SEEN_JOBS_FILE, "a") as f:
     for job in all_new_jobs:
         f.write(job["job_url"] + "\n")
 
-# 📁 Save filtered job log
+# Save filtered job log
 if filtered_log_entries:
     with open(FILTERED_LOG_FILE, "a") as log_file:
         log_file.write(f"\n🕐 Run at {timestamp} — {len(filtered_log_entries)} jobs filtered:\n")
         for entry in filtered_log_entries:
             log_file.write(entry + "\n")
 
-# ✅ Console summary
+# Console summary
 print(f"✅ {len(all_new_jobs)} jobs posted to Slack.")
 print(f"🚫 {filtered_out_count} jobs skipped due to filtering rules.")
