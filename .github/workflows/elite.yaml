@@ -1,0 +1,38 @@
+name: Cybersecurity Job Alert Bot
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # every hour
+  workflow_dispatch:      # allows manual run
+
+jobs:
+  run-script:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install git+https://github.com/speedyapply/JobSpy.git requests
+
+      - name: Run job_alert.py
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: python job_alert.py
+
+      - name: Commit seen and filtered logs
+        run: |
+          git config --global user.name "CyberJobBot"
+          git config --global user.email "bot@example.com"
+          git add seen_jobs.txt filtered_jobs.log || true
+          git commit -m "Update seen jobs and logs [bot]" || echo "No changes to commit"
+          git push || echo "Nothing to push"
+
+
