@@ -7,7 +7,7 @@ from collections import defaultdict
 
 # 🔐 Set your Slack webhook URL here or use an environment variable
 
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+SLACK_WEBHOOK_URL = os.getenv("SLACK")
 
 COMPANIES = ["Google", "Microsoft", "Amazon Web Services", "Cisco", "IBM", "Oracle", "Salesforce", "Apple",
     "Adobe", "TikTok", "Meta", "Snap Inc.", "Zoom Video Communications", "Dropbox", "Slack Technologies",
