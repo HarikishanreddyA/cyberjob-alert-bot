@@ -24,7 +24,7 @@ jobs:
 
       - name: Run elite_companies.py
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK }}
+          SLACK: ${{ secrets.SLACK }}
         run: python elite_companies.py
 
       - name: Commit seen and filtered logs
