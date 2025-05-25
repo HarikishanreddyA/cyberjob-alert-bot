@@ -9,7 +9,30 @@ from collections import defaultdict
 
 SLACK_WEBHOOK_URL = os.getenv("SLACK")
 
-COMPANIES = ["Google"]
+COMPANIES = ["Google", "Microsoft", "Amazon Web Services", "Cisco", "IBM", "Oracle", "Salesforce", "Apple",
+    "Adobe", "TikTok", "Meta", "Snap Inc.", "Zoom Video Communications", "Dropbox", "Slack Technologies",
+    "Built In", "Built In NYC", "Indeed", "Axios", "Nucamp", "Financial Times","Palo Alto Networks", "CrowdStrike", "Fortinet", "Check Point Software Technologies", "Trend Micro",
+    "FireEye", "McAfee", "Sophos", "Darktrace", "SentinelOne", "Rapid7", "Proofpoint", "Tenable", "Imperva",
+    "Varonis Systems", "CyberArk", "Okta", "Zscaler", "Qualys", "Ping Identity", "KnowBe4", "OneTrust",
+    "SailPoint Technologies", "Illumio", "Lookout", "Red Canary", "Laika", "GuidePoint Security", "Fortra",
+    "Druva", "Fingerprint", "Pretorian", "Deloitte", "PwC", "Ernst & Young", "KPMG", "Accenture", "Capgemini", "Booz Allen Hamilton", "CGI",
+    "Leidos", "SAIC", "ManTech", "Peraton", "Cognizant", "Infosys", "Wipro", "HCL Technologies",
+    "Tech Mahindra", "Tata Consultancy Services", "theservicedesk.net", "Coursera", "Business Insider", "JPMorgan Chase", "Bank of America", "Wells Fargo", "Citigroup", "Goldman Sachs", "Morgan Stanley",
+    "Capital One", "American Express", "Barclays", "HSBC", "UBS", "Deutsche Bank", "BNP Paribas",
+    "Credit Suisse", "TD Bank", "PNC Financial Services", "U.S. Bank", "State Street Corporation", "Lockheed Martin", "Northrop Grumman", "Raytheon Technologies", "General Dynamics", "BAE Systems",
+    "Boeing", "L3Harris Technologies", "CACI International", "Kratos Defense & Security Solutions",
+    "Parsons Corporation", "Amentum", "Dynetics", "Sierra Nevada Corporation", "Elbit Systems",
+    "Mercury Systems", "Rheinmetall", "Leonardo DRS", "REVERB", "LinkedIn", "Reddit",
+    "BMO Financial Group", "Fifth Third Bank", "UnitedHealth Group", "Anthem", "Cigna", "CVS Health", "Humana", "Kaiser Permanente",
+    "Blue Cross Blue Shield", "Aetna", "Centene Corporation", "Magellan Health", "Molina Healthcare",
+    "WellCare Health Plans", "Allscripts", "Cerner Corporation", "McKesson Corporation",
+    "AmerisourceBergen", "Cardinal Health", "Express Scripts", "Optum", "Change Healthcare", "Walmart", "Target", "Best Buy", "Costco Wholesale", "The Home Depot", "Lowe's Companies",
+    "CVS Pharmacy", "Walgreens Boots Alliance", "Kroger", "Albertsons Companies", "eBay", "Etsy",
+    "Wayfair", "Shopify", "Chewy", "Zappos", "Overstock.com", "Rakuten", "Newegg", "ASOS", "Verizon Communications", "AT&T", "T-Mobile US", "Comcast", "Charter Communications",
+    "Sprint Corporation", "CenturyLink", "Frontier Communications", "Windstream Holdings",
+    "Cox Communications", "Altice USA", "Dish Network", "U.S. Cellular", "Shentel",
+    "Mediacom Communications", "RCN Corporation", "WOW! Internet, Cable & Phone",
+    "Atlantic Broadband", "Blue Ridge Communications"]
 
 
 SECURITY_TERMS = ["cybersecurity", "security analyst", "security engineer", "network engineer"]
