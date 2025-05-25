@@ -36,7 +36,7 @@ COMPANIES = ["Google", "Microsoft", "Amazon Web Services", "Cisco", "IBM", "Orac
 
 
 SECURITY_TERMS = ["cybersecurity", "security analyst", "security engineer", "network engineer"]
-EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
+EXPERIENCE_LEVELS = ["entry level","associate"]
 
 REJECT_IF_TITLE_CONTAINS = [
     "senior", "sr", "manager", "lead", "director", "principal", "architect",
@@ -54,21 +54,6 @@ REJECT_IF_DESCRIPTION_CONTAINS = [
     "citizenship required", "security clearance", "ts/sci", "ts / sci",
     "polygraph", "top secret", "clearance required", "iat level ii", "public trust"
 ]
-
-EXPERIENCE_PATTERNS = [
-    r"\b(3|[4-9]|\d{2,})\+?\s*(years|yrs)\b",
-    r"\b(3|[4-9]|\d{2,})\s*(to|–|-)\s*\d+\s*(years|yrs)\b",
-    r"\b(three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(years|yrs)\b",
-    r"\b(3|[4-9]|\d{2,})\+?\s*years?\s+.*(experience|working|background)"
-]
-
-def has_too_much_experience(description):
-    if not description:
-        return False
-    for pattern in EXPERIENCE_PATTERNS:
-        if re.search(pattern, description, re.IGNORECASE):
-            return True
-    return False
 
 # ✅ Job Tracking
 grouped_jobs = defaultdict(list)
@@ -88,7 +73,7 @@ for company in COMPANIES:
                 search_term=f"{term} {company}",
                 location="United States",
                 results_wanted=15,
-                hours_old=1000,
+                hours_old=1,
                 experience_level=EXPERIENCE_LEVELS,
                 remote_only=False,
                 easy_apply=False,
@@ -123,9 +108,6 @@ for company in COMPANIES:
                     print(f"⚠️  Skipped (clearance/citizenship): {job.get('title')} at {job.get('company')}")
                     continue
 
-                if has_too_much_experience(description):
-                    print(f"⚠️  Skipped (3+ years experience): {job.get('title')} at {job.get('company')}")
-                    continue
 
                 grouped_jobs[company].append(job)
                 total_jobs += 1
