@@ -9,7 +9,7 @@ import concurrent.futures
 from functools import lru_cache
 import re
 
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 SEEN_JOBS_FILE = "test_seen_jobs.json"
 FILTERED_JOBS_FILE = "test_filtered_jobs.json"
 MAX_JOBS_TO_KEEP = 500  # Reduced for testing
