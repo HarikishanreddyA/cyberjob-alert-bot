@@ -1,0 +1,42 @@
+name: Test Job Alert Bot
+
+on:
+  workflow_dispatch:  # Manual trigger only for testing
+
+permissions:
+  contents: write    # Required for pushing changes
+
+jobs:
+  test-run:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install git+https://github.com/speedyapply/JobSpy.git requests
+
+      - name: Run test script
+        run: python test_job_alert.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git add test_seen_jobs.json
+            git commit -m "Update test results [skip ci]"
+            git push origin HEAD:main
+          else
+            echo "No changes to commit"
+          fi 
