@@ -31,22 +31,27 @@ jobs:
         run: python test_job_alert.py
 
       - name: Store job data as artifacts
-        uses: actions/upload-artifact@v3
+        if: always()  # Run even if previous steps failed
+        uses: actions/upload-artifact@v2  # Changed from v3 to v2
         with:
-          name: job-data
+          name: job-data-${{ github.run_number }}
           path: |
             test_seen_jobs.json
             test_filtered_jobs.json
           retention-days: 7
 
+      - name: Install jq
+        run: sudo apt-get install jq
+
       - name: Commit and push changes
+        if: success()  # Only run if script succeeded
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           if [[ -n "$(git status --porcelain)" ]]; then
             # Add both JSON files
-            git add test_seen_jobs.json test_filtered_jobs.json
+            git add test_seen_jobs.json test_filtered_jobs.json || true
             
             # Get current date for commit message
             DATE=$(date '+%Y-%m-%d %H:%M:%S')
@@ -69,16 +74,17 @@ jobs:
             git commit -F commit_msg.txt
             
             # Push changes
-            git push origin HEAD:main
+            git push origin HEAD:main || echo "Failed to push changes"
           else
             echo "No changes to commit"
           fi
 
       - name: Cleanup old artifacts
+        if: success()
         run: |
           # Keep only last 7 days of JSON files to prevent repository bloat
-          find . -name "test_*.json" -type f -mtime +7 -exec git rm {} \;
+          find . -name "test_*.json" -type f -mtime +7 -exec git rm {} \; || true
           if [[ -n "$(git status --porcelain)" ]]; then
-            git commit -m "Cleanup old job data files [skip ci]"
-            git push origin HEAD:main
+            git commit -m "Cleanup old job data files [skip ci]" || true
+            git push origin HEAD:main || echo "Failed to push cleanup changes"
           fi 
