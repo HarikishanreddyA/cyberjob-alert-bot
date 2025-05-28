@@ -137,7 +137,14 @@ if not all_new_jobs:
     message = f"🔍 No new cybersecurity jobs found in the last hour (as of {timestamp})."
     requests.post(SLACK_WEBHOOK_URL, json={"text": message})
 else:
-    header = f"🔔 *New Cybersecurity Jobs (fetched at {timestamp}):*"
+    header = (
+        f"🔔 *New Cybersecurity Jobs (fetched at {timestamp}):*\n"
+        f"📊 *Job Statistics:*\n"
+        f"• Total jobs found: {len(all_new_jobs) + filtered_out_count}\n"
+        f"• Jobs posted: {len(all_new_jobs)}\n"
+        f"• Jobs filtered out: {filtered_out_count}\n"
+        f"-------------------"
+    )
     requests.post(SLACK_WEBHOOK_URL, json={"text": header})
     time.sleep(1)
 
