@@ -2,6 +2,8 @@ name: Test Job Alert Bot
 
 on:
   workflow_dispatch:  # Manual trigger only for testing
+  schedule:
+    - cron: '0 */4 * * *'  # Run every 4 hours during testing
 
 permissions:
   contents: write    # Required for pushing changes
@@ -28,15 +30,55 @@ jobs:
       - name: Run test script
         run: python test_job_alert.py
 
+      - name: Store job data as artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: job-data
+          path: |
+            test_seen_jobs.json
+            test_filtered_jobs.json
+          retention-days: 7
+
       - name: Commit and push changes
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           if [[ -n "$(git status --porcelain)" ]]; then
-            git add test_seen_jobs.json
-            git commit -m "Update test results [skip ci]"
+            # Add both JSON files
+            git add test_seen_jobs.json test_filtered_jobs.json
+            
+            # Get current date for commit message
+            DATE=$(date '+%Y-%m-%d %H:%M:%S')
+            
+            # Create detailed commit message
+            echo "Test Run Results - ${DATE}" > commit_msg.txt
+            echo "" >> commit_msg.txt
+            echo "Updated Files:" >> commit_msg.txt
+            echo "- test_seen_jobs.json" >> commit_msg.txt
+            echo "- test_filtered_jobs.json" >> commit_msg.txt
+            
+            # Add statistics if available
+            if [[ -f test_filtered_jobs.json ]]; then
+              echo "" >> commit_msg.txt
+              echo "Filter Statistics:" >> commit_msg.txt
+              echo "$(jq '.filtered_jobs | length' test_filtered_jobs.json) jobs filtered" >> commit_msg.txt
+            fi
+            
+            # Commit with the detailed message
+            git commit -F commit_msg.txt
+            
+            # Push changes
             git push origin HEAD:main
           else
             echo "No changes to commit"
+          fi
+
+      - name: Cleanup old artifacts
+        run: |
+          # Keep only last 7 days of JSON files to prevent repository bloat
+          find . -name "test_*.json" -type f -mtime +7 -exec git rm {} \;
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git commit -m "Cleanup old job data files [skip ci]"
+            git push origin HEAD:main
           fi 
