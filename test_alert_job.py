@@ -11,6 +11,7 @@ import re
 
 SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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"
 SEEN_JOBS_FILE = "test_seen_jobs.json"
+FILTERED_JOBS_FILE = "test_filtered_jobs.json"
 MAX_JOBS_TO_KEEP = 500  # Reduced for testing
 
 # Test configuration with fewer search terms and stricter filters
@@ -28,14 +29,26 @@ TITLE_KEYWORDS = re.compile(r'security analyst|cyber security|information securi
 REJECT_TITLE = re.compile(r'senior|sr\.|lead|manager|director|principal|architect|head|chief|vp|vice president|staff|expert|consultant', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
 EASY_APPLY = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|apply now|apply with your profile|apply with linkedin', re.I)
+EXPERIENCE_PATTERN = re.compile(r'(\d+)[\+]?\s*(?:to|\-|\–)\s*(\d+)\s+years?|(\d+)[\+]?\s+years?|(\d+)[\+]?\s+years?\s+experience', re.I)
 
 # Cache seen jobs in memory
 SEEN_JOBS = set()
+FILTERED_JOBS = []
 
-@lru_cache(maxsize=1000)
-def check_title_match(title):
-    """Cache and check title matches for better performance"""
-    return bool(TITLE_KEYWORDS.search(title))
+def extract_experience_years(text):
+    """Extract years of experience from text"""
+    matches = EXPERIENCE_PATTERN.finditer(text)
+    min_years = float('inf')
+    
+    for match in matches:
+        if match.group(1) and match.group(2):  # Range format: "2-4 years"
+            min_years = min(min_years, int(match.group(1)))
+        elif match.group(3):  # Single number format: "3 years"
+            min_years = min(min_years, int(match.group(3)))
+        elif match.group(4):  # Plus format: "3+ years"
+            min_years = min(min_years, int(match.group(4)))
+    
+    return min_years if min_years != float('inf') else None
 
 def load_seen_jobs():
     """Load seen jobs from JSON file into memory"""
@@ -59,9 +72,28 @@ def save_seen_jobs():
             "last_updated": datetime.now().isoformat()
         }, f, indent=2)
 
+def save_filtered_jobs():
+    """Save filtered jobs with reasons to JSON file"""
+    with open(FILTERED_JOBS_FILE, "w") as f:
+        json.dump({
+            "filtered_jobs": FILTERED_JOBS[-MAX_JOBS_TO_KEEP:],
+            "last_updated": datetime.now().isoformat()
+        }, f, indent=2)
+
 def save_seen_job(url):
     """Add single job to tracking set"""
     SEEN_JOBS.add(url)
+
+def add_filtered_job(job, reason, details=""):
+    """Add job to filtered list with reason"""
+    FILTERED_JOBS.append({
+        "title": job.get("title"),
+        "company": job.get("company"),
+        "url": job.get("job_url"),
+        "filter_reason": reason,
+        "filter_details": details,
+        "date_filtered": datetime.now().isoformat()
+    })
 
 def filter_job(job):
     """Filter a single job with stricter criteria"""
@@ -69,6 +101,7 @@ def filter_job(job):
     
     # Skip if already seen
     if url in SEEN_JOBS:
+        add_filtered_job(job, "seen")
         return None, "seen"
 
     title = str(job.get("title", "")).lower()
@@ -79,18 +112,28 @@ def filter_job(job):
 
     # Check source first
     if SOURCE_REJECT.search(source):
+        add_filtered_job(job, "source", f"Rejected source: {source}")
         return None, "source"
 
     # Check title requirements
     if not check_title_match(title):
+        add_filtered_job(job, "title_keywords", f"Title doesn't match required keywords: {title}")
         return None, "title_keywords"
 
     if REJECT_TITLE.search(title):
+        add_filtered_job(job, "title_reject", f"Title contains rejected terms: {title}")
         return None, "title_reject"
+
+    # Check experience requirements in description
+    years = extract_experience_years(description)
+    if years and years > 3:
+        add_filtered_job(job, "experience", f"Required {years} years of experience")
+        return None, "experience"
 
     # Check for easy apply
     full_text = f"{title} {description} {apply_text}"
     if EASY_APPLY.search(full_text):
+        add_filtered_job(job, "easy_apply", "Easy Apply job posting")
         return None, "easy_apply"
 
     # Return job with all details for better tracking
@@ -100,13 +143,22 @@ def filter_job(job):
         "location": job.get("location"),
         "job_url": url,
         "date_posted": job.get("date_posted"),
-        "via": job.get("via")
+        "via": job.get("via"),
+        "description": description  # Including description in output
     }, "passed"
 
 def process_jobs_batch(jobs_batch):
     """Process a batch of jobs in parallel"""
     filtered_jobs = []
-    filter_counts = {"seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0, "passed": 0}
+    filter_counts = {
+        "seen": 0, 
+        "source": 0, 
+        "title_keywords": 0, 
+        "title_reject": 0, 
+        "experience": 0,
+        "easy_apply": 0, 
+        "passed": 0
+    }
     
     if jobs_batch.empty:
         return filtered_jobs, filter_counts
@@ -141,7 +193,15 @@ def main():
     print("🔄 Starting test job alert script...")
     load_seen_jobs()
     all_new_jobs = []
-    total_filter_counts = {"seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0, "passed": 0}
+    total_filter_counts = {
+        "seen": 0, 
+        "source": 0, 
+        "title_keywords": 0, 
+        "title_reject": 0, 
+        "experience": 0,
+        "easy_apply": 0, 
+        "passed": 0
+    }
 
     try:
         for term in SEARCH_TERMS:
@@ -172,8 +232,9 @@ def main():
                 print(f"❌ Error searching '{term}': {e}")
                 continue
 
-        # Save seen jobs
+        # Save jobs data
         save_seen_jobs()
+        save_filtered_jobs()
 
         # Send results to Slack
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -192,6 +253,7 @@ def main():
                 f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
                 f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
                 f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
+                f"  - Experience > 3 years: {total_filter_counts['experience']}\n"
                 f"  - Easy Apply: {total_filter_counts['easy_apply']}\n"
                 f"-------------------"
             )
@@ -202,7 +264,8 @@ def main():
                 message = (
                     f"*{job['title']}* at *{job['company']}*\n"
                     f"📍 {job['location']} | 🕐 Posted: {job['date_posted'] if job['date_posted'] else 'N/A'}\n"
-                    f"🔗 <{job['job_url']}> via {job['via'].capitalize()}"
+                    f"🔗 <{job['job_url']}> via {job['via'].capitalize()}\n"
+                    f"📝 Description Preview: {job['description'][:200]}..." if job['description'] else ""
                 )
                 post_to_slack(message)
                 time.sleep(1)
@@ -210,6 +273,10 @@ def main():
         print(f"\n✅ Test Results:")
         print(f"• {len(all_new_jobs)} jobs posted to Slack")
         print(f"• {sum(total_filter_counts.values()) - len(all_new_jobs)} jobs filtered out")
+        print("\n📊 Filter Breakdown:")
+        for reason, count in total_filter_counts.items():
+            if count > 0:
+                print(f"• {reason}: {count}")
         
     except Exception as e:
         print(f"❌ Error in main execution: {e}")
