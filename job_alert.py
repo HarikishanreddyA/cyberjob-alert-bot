@@ -25,7 +25,7 @@ SEARCH_TERMS = [
     "infosec"
 ]
 
-EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
+EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
 PLATFORMS = ["linkedin"]
 
 # Compile regex patterns for faster matching
