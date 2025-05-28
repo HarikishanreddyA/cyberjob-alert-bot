@@ -32,13 +32,14 @@ jobs:
 
       - name: Store job data as artifacts
         if: always()  # Run even if previous steps failed
-        uses: actions/upload-artifact@v2  # Changed from v3 to v2
+        uses: actions/upload-artifact@v4.3.1  # Using latest stable version
         with:
           name: job-data-${{ github.run_number }}
           path: |
             test_seen_jobs.json
             test_filtered_jobs.json
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Install jq
         run: sudo apt-get install jq
