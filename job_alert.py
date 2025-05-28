@@ -26,7 +26,7 @@ SEARCH_TERMS = [
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
-PLATFORMS = ["linkedin", "indeed", "google"]
+PLATFORMS = ["linkedin"]
 
 # Compile regex patterns for faster matching
 TITLE_KEYWORDS = re.compile(r'cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
