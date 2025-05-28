@@ -2,52 +2,67 @@ from jobspy import scrape_jobs
 import requests
 import time
 import os
-import re
 from datetime import datetime
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL") 
+
+SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+
 SEEN_JOBS_FILE = "seen_jobs.txt"
-FILTERED_LOG_FILE = "filtered_jobs.log"
 
 SEARCH_TERMS = [
-    "cybersecurity", "security engineer", "SOC analyst", "information security",
-    "GRC analyst", "cloud security", "junior security analyst", "infosec"
+    "cybersecurity",
+    "security engineer",
+    "SOC analyst",
+    "information security",
+    "GRC analyst",
+    "cloud security",
+    "junior security analyst",
+    "infosec"
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
-PLATFORMS = ["linkedin"]
+PLATFORMS = ["linkedin", "indeed", "google"]
 
+# ✅ Title whitelist: only these keywords must be present
 REQUIRED_TITLE_KEYWORDS = [
     "cyber", "security", "soc", "grc", "infosec", "threat", "incident response",
     "vulnerability", "detection", "cloud security", "security analyst", "security engineer",
     "malware", "siem", "log analysis", "risk", "appsec", "devsecops"
 ]
 
+# ❌ Title-based rejection (senior/manager)
 REJECT_IF_TITLE_CONTAINS = [
     "senior", "manager", "lead", "director", "principal", "architect",
     "vp", "vice president", "chief", "head of", "operations manager"
 ]
 
+# ❌ Description-based rejection
 REJECT_IF_DESCRIPTION_CONTAINS = [
     "us citizen", "u.s. citizen", "must be a us citizen", "must be a U.S. citizen", "only us citizens",
     "citizenship required", "security clearance", "ts/sci", "ts / sci", "polygraph", "top secret", "clearance required",
     "iat level ii", "t1 public trust", "public trust",
+    "easy apply", "quick apply",  # Added to filter out easy apply jobs
+
+    "3+ years", "4+ years", "5+ years", "6+ years", "7+ years", "8+ years", "9+ years", "10+ years",
+    "three years", "four years", "five years", "six years", "seven years", "eight years", "nine years", "ten years",
+    "3 years of experience", "4 years of experience", "5 years of experience", "8 years of experience",
+    "experience: 3 years", "experience: 4 years", "experience: 5 years", "experience: 8 years",
+    "at least 3 years", "at least 4 years", "at least 5 years", "minimum of 3 years", "minimum of 4 years",
+    "minimum of 6 years", "minimum of 7 years", "minimum of 8 years",
+    "6 years of professional experience", "7 years of professional experience", "8 years of professional experience",
+
+    "2-4 years", "2 - 4 years", "2–4 years", "2 – 4 years",
+    "3-5 years", "3 - 5 years", "3–5 years", "3 – 5 years",
+    "4-6 years", "4 - 6 years", "4–6 years", "4 – 6 years",
+    "5-8 years", "5 - 8 years", "5–8 years", "5 – 8 years",
+    "2 to 4 years", "3 to 5 years", "4 to 6 years", "5 to 8 years",
+    "2-7 years", "2 – 7 years", "2 to 7 years",
+    "years of experience required", "years' experience required",
+    "senior level", "senior-level", "experienced professional"
 ]
 
-EXPERIENCE_PATTERNS = [
-    r"\b(3|[4-9]|\d{2,})\+?\s*(years|yrs)\b",
-    r"\b(3|[4-9]|\d{2,})\s*(to|–|-)\s*\d+\s*(years|yrs)\b",
-    r"\b(three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(years|yrs)\b",
-    r"\b(3|[4-9]|\d{2,})\+?\s*years?\s+.*(experience|working|background)"
-]
-
-def has_too_much_experience(description):
-    if not description:
-        return False
-    for pattern in EXPERIENCE_PATTERNS:
-        if re.search(pattern, description, re.IGNORECASE):
-            return True
-    return False
+# Add source-based rejection
+REJECT_IF_SOURCE_MATCHES = ["dice", "lensa"]
 
 # Load seen jobs
 if os.path.exists(SEEN_JOBS_FILE):
@@ -57,10 +72,9 @@ else:
     seen_jobs = set()
 
 all_new_jobs = []
-filtered_log_entries = []
 filtered_out_count = 0
 
-# Scrape loop
+# 🔍 Scrape loop
 for term in SEARCH_TERMS:
     for site in PLATFORMS:
         try:
@@ -74,8 +88,6 @@ for term in SEARCH_TERMS:
                 experience_level=EXPERIENCE_LEVELS,
                 country_indeed="USA",
                 remote_only=False,
-                easy_apply=False,
-                linkedin_fetch_description=True,
                 verbose=0
             )
 
@@ -87,32 +99,25 @@ for term in SEARCH_TERMS:
                 title = job.get("title", "").lower()
                 description_raw = job.get("description")
                 description = description_raw.lower() if isinstance(description_raw, str) else ""
-                job_info = f"{job.get('title', 'No Title')} at {job.get('company', 'No Company')} ({url})"
 
-                # 🚫 Easy Apply jobs (extra check)
-                if job.get("easy_apply", False):
-                    filtered_log_entries.append(f"[EASY-APPLY] ❌ {job_info}")
-                    filtered_out_count += 1
-                    continue
-
-                # ✅ Filter rules
+                # ✅ Whitelist: must contain at least 1 required keyword
                 if not any(kw in title for kw in REQUIRED_TITLE_KEYWORDS):
-                    filtered_log_entries.append(f"[TITLE-WHITELIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
+                # ❌ Title blacklist
                 if any(bad in title for bad in REJECT_IF_TITLE_CONTAINS):
-                    filtered_log_entries.append(f"[TITLE-BLACKLIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
+                # ❌ Description blacklist
                 if any(bad in description for bad in REJECT_IF_DESCRIPTION_CONTAINS):
-                    filtered_log_entries.append(f"[DESC-BLACKLIST] ❌ {job_info}")
                     filtered_out_count += 1
                     continue
 
-                if has_too_much_experience(description):
-                    filtered_log_entries.append(f"[EXP-REGEX] ❌ {job_info}")
+                # ❌ Source blacklist
+                job_source = job.get('via', '').lower()
+                if any(source in job_source for source in REJECT_IF_SOURCE_MATCHES):
                     filtered_out_count += 1
                     continue
 
@@ -125,7 +130,7 @@ for term in SEARCH_TERMS:
             print(f"❌ Error scraping site '{site}' for term '{term}': {e}")
             continue
 
-# Send to Slack
+# 📤 Send to Slack
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
 
 if not all_new_jobs:
@@ -146,18 +151,19 @@ else:
         requests.post(SLACK_WEBHOOK_URL, json={"text": message})
         time.sleep(1)
 
-# Save seen jobs
+# 💾 Save seen jobs
 with open(SEEN_JOBS_FILE, "a") as f:
     for job in all_new_jobs:
         f.write(job["job_url"] + "\n")
 
-# Save filtered job log
-if filtered_log_entries:
-    with open(FILTERED_LOG_FILE, "a") as log_file:
-        log_file.write(f"\n🕐 Run at {timestamp} — {len(filtered_log_entries)} jobs filtered:\n")
-        for entry in filtered_log_entries:
-            log_file.write(entry + "\n")
-
-# Console summary
+# ✅ Console summary
 print(f"✅ {len(all_new_jobs)} jobs posted to Slack.")
 print(f"🚫 {filtered_out_count} jobs skipped due to filtering rules.")
+print(f"📊 Total jobs processed: {len(all_new_jobs) + filtered_out_count}")
+print(f"💼 Jobs listed by platform:")
+platform_counts = {}
+for job in all_new_jobs:
+    source = job.get('via', 'Unknown').capitalize()
+    platform_counts[source] = platform_counts.get(source, 0) + 1
+for platform, count in platform_counts.items():
+    print(f"   • {platform}: {count} jobs")
