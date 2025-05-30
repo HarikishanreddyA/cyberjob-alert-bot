@@ -25,8 +25,8 @@ SEARCH_TERMS = [
     "infosec"
 ]
 
-EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
-PLATFORMS = ["linkedin"]
+EXPERIENCE_LEVELS = ["entry level", "internship", "associate", "mid-senior level"]
+PLATFORMS = ["linkedin", "indeed", "google"]
 
 # Compile regex patterns for faster matching
 TITLE_KEYWORDS = re.compile(r'cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
@@ -79,9 +79,10 @@ def filter_job(job):
     description = str(job.get("description", "")).lower() if job.get("description") else ""
     source = str(job.get("via", "")).lower()
     apply_text = str(job.get("apply_text", "")).lower()
+    company = str(job.get("company", "")).lower()
 
-    # Check source first (fastest check)
-    if SOURCE_REJECT.search(source):
+    # Check source and description for Lensa/Dice mentions
+    if SOURCE_REJECT.search(source) or SOURCE_REJECT.search(description) or SOURCE_REJECT.search(company):
         return None, "source"
 
     # Check title requirements
