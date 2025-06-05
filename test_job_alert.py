@@ -22,7 +22,7 @@ import random
 from threading import Lock
 
 # Configuration
-SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
+SLACK_WEBHOOK_URL = os.getenv("SLACK_TEST")
 SEEN_JOBS_FILE = "seen_jobs.json"
 MAX_JOBS_TO_KEEP = 1000
 MAX_STAGE2_JOBS = 50  # Increased for comprehensive filtering (was 20)
