@@ -337,8 +337,8 @@ def main():
                     site_name=PLATFORMS,
                     search_term=term,
                     location="United States",
-                    results_wanted=10,  # Reduced for speed
-                    hours_old=2,  # 2 hours to catch more jobs
+                    results_wanted=15,  # Reduced for speed
+                    hours_old=1,  # 2 hours to catch more jobs
                     experience_level=EXPERIENCE_LEVELS,
                     country_indeed="USA",
                     remote_only=False,
