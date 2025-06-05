@@ -30,6 +30,6 @@ jobs:
 
       - name: Run optimized job_alert.py
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_TEST }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python test_job_alert.py
