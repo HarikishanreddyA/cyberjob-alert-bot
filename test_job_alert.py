@@ -48,7 +48,7 @@ EASY_APPLY = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|app
 
 # Stage 2 Filters (Deep filtering - requires full description)
 CLEARANCE_KEYWORDS = re.compile(r'security clearance|secret clearance|top secret|ts/sci|clearance required|government clearance|dod clearance|federal clearance|clearability|able to obtain clearance', re.I)
-EXPERIENCE_REJECT = re.compile(r'(?:minimum|at least|requires?|must have)\s+(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|\d{2,})\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience|exp)', re.I)
+EXPERIENCE_REJECT = re.compile(r'(?:minimum|at least|requires?|must have)?\s*(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|1[0-9]|2[0-9])\s*(?:\+)?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:(?:non-internship\s+)?(?:professional\s+)?(?:software\s+)?(?:development\s+)?(?:design\s+)?(?:architecture\s+)?(?:experience|exp)|experience|exp)(?!\s+(?:preferred|desired|plus|a plus|helpful|nice to have))', re.I)
 SPONSORSHIP_REJECT = re.compile(r'(?:no|not|does not|will not|cannot|unable to)\s+(?:provide|offer|sponsor)\s+(?:visa|sponsorship|work authorization)|us citizens only|must be (?:us citizen|authorized to work)|citizen.*required|no sponsorship|visa sponsorship not available|eligible to work (?:in|for) (?:us|usa)|must be legally authorized', re.I)
 
 # Cache seen jobs in memory
