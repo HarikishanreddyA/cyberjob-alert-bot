@@ -25,16 +25,71 @@ from threading import Lock
 SLACK_WEBHOOK_URL = os.getenv("SLACK_WEBHOOK_URL")
 SEEN_JOBS_FILE = "seen_jobs.json"
 MAX_JOBS_TO_KEEP = 1000
-MAX_STAGE2_JOBS = 20  # Limit deep filtering for speed
+MAX_STAGE2_JOBS = 50  # Increased for comprehensive filtering (was 20)
 DESCRIPTION_TIMEOUT = 10  # Timeout per description fetch
 
-# Search configuration - optimized for entry-level positions
+# Search configuration - comprehensive entry-level cybersecurity positions
 SEARCH_TERMS = [
+    # Core Security Analyst Roles
     "junior security analyst",
     "entry level cybersecurity", 
     "SOC analyst entry level",
     "information security analyst",
-    "cybersecurity analyst"
+    "cybersecurity analyst",
+    
+    # Security Engineering
+    "junior security engineer",
+    "entry level security engineer",
+    "cybersecurity engineer",
+    
+    # DevSecOps & Application Security
+    "junior devsecops",
+    "entry level devsecops",
+    "junior application security",
+    "appsec analyst",
+    
+    # Penetration Testing & Red Team
+    "junior penetration tester",
+    "entry level pentester",
+    "junior ethical hacker",
+    
+    # GRC & Compliance
+    "junior GRC analyst", 
+    "entry level compliance analyst",
+    "junior risk analyst",
+    "cybersecurity compliance",
+    
+    # Cloud Security
+    "junior cloud security",
+    "entry level cloud security analyst",
+    "cloud security engineer junior",
+    
+    # Incident Response & Threat Analysis
+    "junior incident response",
+    "entry level threat analyst",
+    "junior malware analyst",
+    "cybersecurity incident response",
+    "junior threat detection",
+    "entry level threat detection",
+    "threat detection analyst",
+    
+    # Vulnerability Management
+    "junior vulnerability analyst",
+    "vulnerability management analyst",
+    "security assessment analyst",
+    
+    # Network Security
+    "junior network security",
+    "network security analyst entry level",
+    
+    # Digital Forensics
+    "junior digital forensics",
+    "entry level cyber forensics",
+    
+    # General Entry Level Terms
+    "cybersecurity intern",
+    "security intern",
+    "entry level infosec"
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
@@ -44,11 +99,11 @@ PLATFORMS = ["linkedin"]
 TITLE_KEYWORDS = re.compile(r'cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec', re.I)
 REJECT_TITLE = re.compile(r'senior|sr\.|manager|lead|director|principal|architect|vp|vice president|chief|head of|operations manager', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
-EASY_APPLY = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|apply now|apply with your profile|apply with linkedin', re.I)
+# Note: Easy Apply filtering removed - not available in scraped data
 
 # Stage 2 Filters (Deep filtering - requires full description)
 CLEARANCE_KEYWORDS = re.compile(r'security clearance|secret clearance|top secret|ts/sci|clearance required|government clearance|dod clearance|federal clearance|clearability|able to obtain clearance', re.I)
-EXPERIENCE_REJECT = re.compile(r'(?:minimum|at least|requires?|must have)?\s*(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|1[0-9]|2[0-9])\s*(?:\+)?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:(?:non-internship\s+)?(?:professional\s+)?(?:software\s+)?(?:development\s+)?(?:design\s+)?(?:architecture\s+)?(?:experience|exp)|experience|exp)(?!\s+(?:preferred|desired|plus|a plus|helpful|nice to have))', re.I)
+EXPERIENCE_REJECT = re.compile(r'(?:(?:minimum|at least|requires?|must have)\s+(?:of\s+)?|(?:^|\s))(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|1[0-9]|2[0-9])\s*(?:\+)?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:(?:non-internship\s+)?(?:professional\s+)?(?:software\s+)?(?:development\s+)?(?:design\s+)?(?:architecture\s+)?(?:experience|exp)|experience|exp)?(?!\s+(?:preferred|desired|plus|a plus|helpful|nice to have))', re.I)
 SPONSORSHIP_REJECT = re.compile(r'(?:no|not|does not|will not|cannot|unable to)\s+(?:provide|offer|sponsor)\s+(?:visa|sponsorship|work authorization)|us citizens only|must be (?:us citizen|authorized to work)|citizen.*required|no sponsorship|visa sponsorship not available|eligible to work (?:in|for) (?:us|usa)|must be legally authorized', re.I)
 
 # Cache seen jobs in memory
@@ -196,10 +251,6 @@ def stage1_filter(job):
     if REJECT_TITLE.search(title):
         return None, "title_reject"
 
-    # Filter easy apply jobs
-    if EASY_APPLY.search(f"{title} {description}"):
-        return None, "easy_apply"
-
     return job, "stage1_passed"
 
 def stage2_filter_single(job):
@@ -243,7 +294,7 @@ def process_jobs_batch(jobs_batch):
     final_jobs = []
     filter_counts = {
         "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
-        "easy_apply": 0, "stage1_passed": 0, "clearance_required": 0, 
+        "stage1_passed": 0, "clearance_required": 0, 
         "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
     }
     
@@ -322,7 +373,7 @@ def main():
     all_new_jobs = []
     total_filter_counts = {
         "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
-        "easy_apply": 0, "stage1_passed": 0, "clearance_required": 0, 
+        "stage1_passed": 0, "clearance_required": 0, 
         "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
     }
 
@@ -337,8 +388,8 @@ def main():
                     site_name=PLATFORMS,
                     search_term=term,
                     location="United States",
-                    results_wanted=15,  # Reduced for speed
-                    hours_old=1,  # 2 hours to catch more jobs
+                    results_wanted=100,  # Maximum coverage - catch everything posted
+                    hours_old=1,  # Only last hour for fresh jobs
                     experience_level=EXPERIENCE_LEVELS,
                     country_indeed="USA",
                     remote_only=False,
