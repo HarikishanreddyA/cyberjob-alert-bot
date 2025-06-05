@@ -355,9 +355,16 @@ def post_to_slack(message, max_retries=2):
         print("⚠️ No Slack webhook URL configured")
         return False
         
+    # Slack webhook payload with CyberJobs Notifier branding
+    payload = {
+        "text": message,
+        "username": "CyberJobs Notifier",
+        "icon_emoji": ":bell:"
+    }
+    
     for attempt in range(max_retries):
         try:
-            response = requests.post(SLACK_WEBHOOK_URL, json={"text": message}, timeout=10)
+            response = requests.post(SLACK_WEBHOOK_URL, json=payload, timeout=10)
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException:
@@ -409,32 +416,41 @@ def main():
                 except Exception as e:
                     print(f"❌ Error scraping: {e}")
 
-        # Send results to Slack
+        # Send results to Slack with CyberJobs Notifier format
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        if not all_new_jobs:
-            message = f"🔍 No new entry-level cybersecurity jobs found (as of {timestamp})."
-            post_to_slack(message)
-        else:
-            # Summary header
-            header = (
-                f"🔔 *New Entry-Level Cybersecurity Jobs ({timestamp}):*\n"
-                f"📊 Found {len(all_new_jobs)} jobs | "
-                f"Filtered: {total_filter_counts['clearance_required']} clearance, "
-                f"{total_filter_counts['experience_required']} experience, "
-                f"{total_filter_counts['sponsorship_required']} sponsorship\n"
-                f"-------------------"
-            )
-            post_to_slack(header)
-
-            # Individual job postings
+        # Calculate total jobs processed
+        total_processed = sum(total_filter_counts.values())
+        
+        # Create detailed statistics message
+        message = (
+            f":bell: *New Cybersecurity Jobs (fetched at {timestamp}):*\n"
+            f":bar_chart: *Job Statistics:*\n"
+            f"• Total jobs processed: {total_processed}\n"
+            f"• Jobs posted: {len(all_new_jobs)}\n"
+            f"• Jobs filtered out:\n"
+            f"  - Already seen: {total_filter_counts['seen']}\n"
+            f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
+            f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
+            f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
+            f"  - Security clearance: {total_filter_counts['clearance_required']}\n"
+            f"  - 3+ years experience: {total_filter_counts['experience_required']}\n"
+            f"  - Sponsorship restrictions: {total_filter_counts['sponsorship_required']}\n"
+            f"-------------------"
+        )
+        
+        # Send statistics first
+        post_to_slack(message)
+        
+        # Send individual job listings if any new jobs found
+        if all_new_jobs:
             for job in all_new_jobs:
-                message = (
+                job_message = (
                     f"*{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
                     f"📍 {job.get('location', 'N/A')} | 🕐 {job.get('date_posted', 'N/A')}\n"
-                    f"🔗 <{job.get('job_url', '')}>"
+                    f"🔗 <{job.get('job_url', '')}|Apply Here>"
                 )
-                post_to_slack(message)
+                post_to_slack(job_message)
                 time.sleep(0.5)  # Brief delay between messages
 
         # Save seen jobs
