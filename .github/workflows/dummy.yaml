@@ -1,4 +1,4 @@
-name: Cybersecurity Job Alert Bot
+name: Cybersecurity testing Bot
 
 on:
   schedule:
