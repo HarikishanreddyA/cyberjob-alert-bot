@@ -9,28 +9,35 @@ import concurrent.futures
 from functools import lru_cache
 import re
 
-SLACK_WEBHOOK_URL = os.getenv("SLACK_INTERN")
-SEEN_JOBS_FILE = "seen_jobs.json"
+SLACK_INTERN_URL = os.getenv("SLACK_INTERN")  # Matches env var name
+SEEN_JOBS_FILE = "seen_internship_jobs.json"  # Separate file for internships
 MAX_JOBS_TO_KEEP = 1000  # Keep last 1000 jobs to prevent file from growing too large
 
-# Search configuration
+# Internship-specific search configuration
 SEARCH_TERMS = [
-    "cybersecurity",
-    "security engineer",
-    "SOC analyst",
-    "information security",
-    "GRC analyst",
-    "cloud security",
-    "junior security analyst",
-    "infosec"
+    "cybersecurity intern",
+    "security intern", 
+    "SOC intern",
+    "information security intern",
+    "GRC intern",
+    "cloud security intern",
+    "security analyst intern",
+    "infosec intern",
+    "cybersecurity internship",
+    "security internship",
+    "SOC internship",
+    "information security internship",
+    "cyber intern",
+    "security engineering intern"
 ]
 
-EXPERIENCE_LEVELS = ["internship"]
+EXPERIENCE_LEVELS = ["internship"]  # Only internships
 PLATFORMS = ["linkedin"]
 
-# Compile regex patterns for faster matching
-TITLE_KEYWORDS = re.compile(r'cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
-REJECT_TITLE = re.compile(r'senior|manager|lead|director|principal|architect|vp|vice president|chief|head of|operations manager', re.I)
+# Compile regex patterns for faster matching - internship optimized
+TITLE_KEYWORDS = re.compile(r'intern|internship|cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
+# More lenient for internships - don't reject senior titles as harshly since some are "Senior Intern" positions
+REJECT_TITLE = re.compile(r'manager|lead|director|principal|architect|vp|vice president|chief|head of', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
 EASY_APPLY = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|apply now|apply with your profile|apply with linkedin', re.I)
 
@@ -68,7 +75,7 @@ def save_seen_job(url):
     SEEN_JOBS.add(url)
 
 def filter_job(job):
-    """Filter a single job with all criteria"""
+    """Filter a single job with internship-specific criteria"""
     url = str(job.get("job_url", ""))
     
     # Skip if already seen
@@ -85,10 +92,15 @@ def filter_job(job):
     if SOURCE_REJECT.search(source) or SOURCE_REJECT.search(description) or SOURCE_REJECT.search(company):
         return None, "source"
 
-    # Check title requirements
-    if not check_title_match(title):
+    # For internships, we want to be more inclusive with keywords
+    # Check if it's explicitly an internship OR has security keywords
+    is_internship = bool(re.search(r'intern|internship', title, re.I))
+    has_security_keywords = check_title_match(title)
+    
+    if not (is_internship or has_security_keywords):
         return None, "title_keywords"
 
+    # More lenient title rejection for internships
     if REJECT_TITLE.search(title):
         return None, "title_reject"
 
@@ -122,18 +134,30 @@ def process_jobs_batch(jobs_batch):
 
 def post_to_slack(message, max_retries=3):
     """Post to Slack with retry mechanism"""
+    if not SLACK_INTERN_URL:
+        print("❌ SLACK_INTERN environment variable not set")
+        return False
+    
     for attempt in range(max_retries):
         try:
-            response = requests.post(SLACK_WEBHOOK_URL, json={"text": message})
+            response = requests.post(SLACK_INTERN_URL, json={"text": message})
             response.raise_for_status()
             return True
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Slack API error (attempt {attempt + 1}): {e}")
             if attempt == max_retries - 1:
                 print(f"❌ Failed to send message to Slack after {max_retries} attempts")
                 return False
             time.sleep(1 * (attempt + 1))  # Exponential backoff
 
 def main():
+    # Debug: Check if Slack webhook is configured
+    if SLACK_INTERN_URL:
+        print(f"✅ Slack webhook configured (ends with: ...{SLACK_INTERN_URL[-10:]})")
+    else:
+        print("❌ SLACK_INTERN environment variable not found!")
+        return
+    
     load_seen_jobs()
     all_new_jobs = []
     total_filter_counts = {"seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0, "passed": 0}
@@ -171,15 +195,15 @@ def main():
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
         if not all_new_jobs:
-            message = f"🔍 No new cybersecurity jobs found in the last hour (as of {timestamp})."
+            message = f"🔍 No new cybersecurity internships found in the last hour (as of {timestamp})."
             post_to_slack(message)
         else:
             header = (
-                f"🔔 *New Cybersecurity Jobs (fetched at {timestamp}):*\n"
-                f"📊 *Job Statistics:*\n"
-                f"• Total jobs processed: {sum(total_filter_counts.values())}\n"
-                f"• Jobs posted: {len(all_new_jobs)}\n"
-                f"• Jobs filtered out:\n"
+                f"🎓 *New Cybersecurity Internships (fetched at {timestamp}):*\n"
+                f"📊 *Internship Statistics:*\n"
+                f"• Total internships processed: {sum(total_filter_counts.values())}\n"
+                f"• Internships posted: {len(all_new_jobs)}\n"
+                f"• Internships filtered out:\n"
                 f"  - Already seen: {total_filter_counts['seen']}\n"
                 f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
                 f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
@@ -193,7 +217,7 @@ def main():
             for job in all_new_jobs:
                 posted_date = job.get("date_posted", "Unknown")
                 message = (
-                    f"*{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
+                    f"🎓 *{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
                     f"📍 {job.get('location', 'N/A')} | 🕐 Posted: {posted_date if posted_date else 'N/A'}\n"
                     f"🔗 <{job.get('job_url', '')}> via {job.get('via', 'Unknown').capitalize()}"
                 )
@@ -201,34 +225,16 @@ def main():
                 time.sleep(1)
 
         # Print console summary
-        print(f"✅ {len(all_new_jobs)} jobs posted to Slack.")
-        print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} jobs filtered out.")
+        print(f"✅ {len(all_new_jobs)} internships posted to Slack.")
+        print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} internships filtered out.")
 
         # Save all seen jobs at the end
         save_seen_jobs()
-
-        # If we're running in GitHub Actions, commit the changes
-        if os.getenv("GITHUB_ACTIONS") == "true":
-            try:
-                # Add git configuration
-                os.system('git config --global user.name "CyberJobBot"')
-                os.system('git config --global user.email "github-actions@github.com"')
-                
-                # Stage and commit changes
-                os.system('git add seen_jobs.json')
-                os.system('git commit -m "Update seen jobs list [skip ci]"')
-                
-                # Push using the GITHUB_TOKEN
-                repo_url = f"https://x-access-token:{os.getenv('GITHUB_TOKEN')}@github.com/{os.getenv('GITHUB_REPOSITORY')}.git"
-                os.system(f'git remote set-url origin "{repo_url}"')
-                os.system('git push')
-            except Exception as e:
-                print(f"❌ Error updating GitHub: {e}")
-                # Continue execution even if GitHub update fails
     
     except Exception as e:
         print(f"❌ Error in main execution: {e}")
         raise
 
 if __name__ == "__main__":
-    main()
+    main() 
+
