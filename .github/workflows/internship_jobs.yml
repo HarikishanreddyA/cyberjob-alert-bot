@@ -27,21 +27,7 @@ jobs:
           pip install --upgrade pip
           pip install git+https://github.com/speedyapply/JobSpy.git requests
 
-      - name: Run job_alert.py
+      - name: Run internship_jobs.py
         env:
-          SLACK_WEBHOOK_URL: ${{secrets.SLACK_INTERN}}
-        run: python internship_jobs.py
-
-      - name: Commit and push changes
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Check if there are changes to commit
-          if [[ -n "$(git status --porcelain)" ]]; then
-            git add seen_jobs.json
-            git commit -m "Update seen jobs [skip ci]"
-            git push origin HEAD:main
-          else
-            echo "No changes to commit"
-          fi 
+          SLACK_INTERN: ${{ secrets.SLACK_INTERN }}
+        run: python internship_jobs.py 
