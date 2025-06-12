@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+"""
+Optimized Cybersecurity Job Alert System
+- Two-stage filtering for speed
+- Full LinkedIn description fetching via requests
+- Filters: clearance, 3+ years experience, sponsorship requirements
+- Parallel processing for maximum speed
+- Designed for hourly execution
+"""
+
 from jobspy import scrape_jobs
 import requests
 import time
@@ -8,59 +17,198 @@ from datetime import datetime
 import concurrent.futures
 from functools import lru_cache
 import re
+from bs4 import BeautifulSoup
+import random
+from threading import Lock
 
-SLACK_INTERN_URL = os.getenv("SLACK_INTERN")  # Matches env var name
-SEEN_JOBS_FILE = "seen_internship_jobs.json"  # Separate file for internships
-MAX_JOBS_TO_KEEP = 1000  # Keep last 1000 jobs to prevent file from growing too large
+# Configuration
+SLACK_TEST_URL = os.getenv("SLACK_TEST")  # Matches env var name
+SEEN_JOBS_FILE = "seen_main_jobs.json"  # Separate file from internships
+MAX_JOBS_TO_KEEP = 1000
+MAX_STAGE2_JOBS = 50  # Increased for comprehensive filtering (was 20)
+DESCRIPTION_TIMEOUT = 10  # Timeout per description fetch
 
-# Internship and Co-op specific search configuration
+# Search configuration - comprehensive entry-level cybersecurity positions
 SEARCH_TERMS = [
+    # Core Security Analyst Roles
+    "junior security analyst",
+    "entry level cybersecurity", 
+    "SOC analyst entry level",
+    "information security analyst",
+    "cybersecurity analyst",
+    
+    # Security Engineering
+    "junior security engineer",
+    "entry level security engineer",
+    "cybersecurity engineer",
+    
+    # DevSecOps & Application Security
+    "junior devsecops",
+    "entry level devsecops",
+    "junior application security",
+    "appsec analyst",
+    
+    # Penetration Testing & Red Team
+    "junior penetration tester",
+    "entry level pentester",
+    "junior ethical hacker",
+    
+    # GRC & Compliance
+    "junior GRC analyst", 
+    "entry level compliance analyst",
+    "junior risk analyst",
+    "cybersecurity compliance",
+    
+    # Cloud Security
+    "junior cloud security",
+    "entry level cloud security analyst",
+    "cloud security engineer junior",
+    
+    # Incident Response & Threat Analysis
+    "junior incident response",
+    "entry level threat analyst",
+    "junior malware analyst",
+    "cybersecurity incident response",
+    "junior threat detection",
+    "entry level threat detection",
+    "threat detection analyst",
+    
+    # Vulnerability Management
+    "junior vulnerability analyst",
+    "vulnerability management analyst",
+    "security assessment analyst",
+    
+    # Network Security
+    "junior network security",
+    "network security analyst entry level",
+    
+    # Digital Forensics
+    "junior digital forensics",
+    "entry level cyber forensics",
+    
+    # General Entry Level Terms
     "cybersecurity intern",
-    "security intern", 
-    "SOC intern",
-    "information security intern",
-    "GRC intern",
-    "cloud security intern",
-    "security analyst intern",
-    "infosec intern",
-    "cybersecurity internship",
-    "security internship",
-    "SOC internship",
-    "information security internship",
-    "cyber intern",
-    "security engineering intern",
-    "cybersecurity coop",
-    "security coop",
-    "cybersecurity co-op",
-    "security co-op",
-    "SOC coop",
-    "SOC co-op",
-    "information security coop",
-    "information security co-op",
-    "cyber coop",
-    "cyber co-op"
+    "security intern",
+    "entry level infosec"
 ]
 
-EXPERIENCE_LEVELS = ["internship"]  # JobSpy doesn't have separate "coop" level
+EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
 PLATFORMS = ["linkedin"]
 
-# Compile regex patterns for faster matching - internship and co-op optimized
-TITLE_KEYWORDS = re.compile(r'intern|internship|coop|co-op|cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
-# More lenient for internships - don't reject senior titles as harshly since some are "Senior Intern" positions
-REJECT_TITLE = re.compile(r'manager|lead|director|principal|architect|vp|vice president|chief|head of', re.I)
+# Stage 1 Filters (Quick filtering - no API calls)
+TITLE_KEYWORDS = re.compile(r'cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec', re.I)
+REJECT_TITLE = re.compile(r'senior|sr\.|manager|lead|director|principal|architect|vp|vice president|chief|head of|operations manager', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
-EASY_APPLY = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|apply now|apply with your profile|apply with linkedin', re.I)
+# Note: Easy Apply filtering removed - not available in scraped data
+
+# Stage 2 Filters (Deep filtering - requires full description)
+CLEARANCE_KEYWORDS = re.compile(r'security clearance|secret clearance|top secret|ts/sci|clearance required|government clearance|dod clearance|federal clearance|clearability|able to obtain clearance', re.I)
+EXPERIENCE_REJECT = re.compile(r'(?:(?:minimum|at least|requires?|must have)\s+(?:of\s+)?|(?:^|\s))(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|1[0-9]|2[0-9])\s*(?:\+)?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:(?:non-internship\s+)?(?:professional\s+)?(?:software\s+)?(?:development\s+)?(?:design\s+)?(?:architecture\s+)?(?:experience|exp)|experience|exp)?(?!\s+(?:preferred|desired|plus|a plus|helpful|nice to have))', re.I)
+SPONSORSHIP_REJECT = re.compile(r'(?:no|not|does not|will not|cannot|unable to)\s+(?:provide|offer|sponsor)\s+(?:visa|sponsorship|work authorization)|us citizens only|must be (?:us citizen|authorized to work)|citizen.*required|no sponsorship|visa sponsorship not available|eligible to work (?:in|for) (?:us|usa)|must be legally authorized', re.I)
 
 # Cache seen jobs in memory
 SEEN_JOBS = set()
+session_lock = Lock()
+
+class OptimizedLinkedInFetcher:
+    """Fast LinkedIn description fetcher using requests with proper headers"""
+    
+    def __init__(self):
+        self.session = None
+        self.initialized = False
+        self.request_count = 0
+        self.max_requests = 50  # Reset session after 50 requests to avoid blocks
+        
+    def _get_headers(self):
+        """Browser-like headers to avoid detection"""
+        return {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Cache-Control': 'max-age=0',
+            'DNT': '1',
+        }
+    
+    def _initialize_session(self):
+        """Initialize session with LinkedIn cookies"""
+        try:
+            if self.session:
+                self.session.close()
+                
+            self.session = requests.Session()
+            headers = self._get_headers()
+            
+            # Get cookies from LinkedIn homepage
+            response = self.session.get('https://www.linkedin.com', 
+                                     headers=headers, timeout=5)
+            
+            if response.status_code == 200:
+                headers['Referer'] = 'https://www.linkedin.com/'
+                self.session.headers.update(headers)
+                self.initialized = True
+                self.request_count = 0
+                return True
+            return False
+                
+        except Exception:
+            return False
+    
+    def get_job_description(self, job_url):
+        """Get full job description from LinkedIn job URL"""
+        # Reset session if too many requests
+        if self.request_count >= self.max_requests:
+            self.initialized = False
+            
+        if not self.initialized:
+            if not self._initialize_session():
+                return None
+        
+        try:
+            # Random delay to be respectful
+            time.sleep(random.uniform(0.5, 1.5))
+            
+            response = self.session.get(job_url, timeout=DESCRIPTION_TIMEOUT)
+            self.request_count += 1
+            
+            if response.status_code != 200:
+                return None
+            
+            # Check if redirected to login
+            if 'signin' in response.url or 'login' in response.url:
+                return None
+            
+            # Parse HTML for job description
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Primary selector (most reliable)
+            element = soup.select_one('div.show-more-less-html__markup')
+            if element and element.get_text(strip=True):
+                return element.get_text(strip=True)
+            
+            # Fallback selectors
+            for selector in ['div.show-more-less-html', 'div.description__text']:
+                element = soup.select_one(selector)
+                if element and element.get_text(strip=True):
+                    return element.get_text(strip=True)
+            
+            return None
+            
+        except Exception:
+            return None
+
+# Global fetcher instance
+fetcher = OptimizedLinkedInFetcher()
 
 @lru_cache(maxsize=1000)
 def check_title_match(title):
-    """Cache and check title matches for better performance"""
+    """Cache title matches for performance"""
     return bool(TITLE_KEYWORDS.search(title))
 
 def load_seen_jobs():
-    """Load seen jobs from JSON file into memory"""
+    """Load previously seen jobs from file"""
     global SEEN_JOBS
     if os.path.exists(SEEN_JOBS_FILE):
         try:
@@ -73,19 +221,13 @@ def load_seen_jobs():
         SEEN_JOBS = set()
 
 def save_seen_jobs():
-    """Save seen jobs to JSON file"""
-    # Convert set to list and keep only the most recent jobs
+    """Save seen jobs to file (keep last 1000)"""
     jobs_list = list(SEEN_JOBS)[-MAX_JOBS_TO_KEEP:]
-    
     with open(SEEN_JOBS_FILE, "w") as f:
         json.dump({"seen_jobs": jobs_list, "last_updated": datetime.now().isoformat()}, f, indent=2)
 
-def save_seen_job(url):
-    """Add single job to tracking set"""
-    SEEN_JOBS.add(url)
-
-def filter_job(job):
-    """Filter a single job with internship-specific criteria"""
+def stage1_filter(job):
+    """Stage 1: Quick filtering without API calls"""
     url = str(job.get("job_url", ""))
     
     # Skip if already seen
@@ -95,94 +237,174 @@ def filter_job(job):
     title = str(job.get("title", "")).lower()
     description = str(job.get("description", "")).lower() if job.get("description") else ""
     source = str(job.get("via", "")).lower()
-    apply_text = str(job.get("apply_text", "")).lower()
     company = str(job.get("company", "")).lower()
 
-    # Check source and description for Lensa/Dice mentions
-    if SOURCE_REJECT.search(source) or SOURCE_REJECT.search(description) or SOURCE_REJECT.search(company):
+    # Filter bad sources
+    if SOURCE_REJECT.search(source) or SOURCE_REJECT.search(company):
         return None, "source"
 
-    # For internships and co-ops, we want to be more inclusive with keywords
-    # Check if it's explicitly an internship/co-op OR has security keywords
-    is_internship_or_coop = bool(re.search(r'intern|internship|coop|co-op', title, re.I))
-    has_security_keywords = check_title_match(title)
-    
-    if not (is_internship_or_coop or has_security_keywords):
+    # Title keyword matching
+    if not check_title_match(title):
         return None, "title_keywords"
 
-    # More lenient title rejection for internships
+    # Reject senior positions
     if REJECT_TITLE.search(title):
         return None, "title_reject"
 
-    # Check for easy apply
-    full_text = f"{title} {description} {apply_text}"
-    if EASY_APPLY.search(full_text):
-        return None, "easy_apply"
+    return job, "stage1_passed"
 
-    # If passed all filters, return the job
-    return job, "passed"
+def stage2_filter_single(job):
+    """Stage 2: Deep filtering using full job description"""
+    url = job.get("job_url", "")
+    
+    # Only process LinkedIn jobs for deep filtering
+    if "linkedin.com" not in url:
+        return job, "stage2_passed"
+    
+    try:
+        # Get full job description
+        description = fetcher.get_job_description(url)
+        
+        if not description:
+            # If can't get description, don't filter (avoid false negatives)
+            return job, "stage2_passed"
+        
+        description_lower = description.lower()
+        
+        # Check for security clearance requirement
+        if CLEARANCE_KEYWORDS.search(description):
+            return None, "clearance_required"
+        
+        # Check for 3+ years experience requirement
+        if EXPERIENCE_REJECT.search(description):
+            return None, "experience_required"
+            
+        # Check for sponsorship restrictions
+        if SPONSORSHIP_REJECT.search(description):
+            return None, "sponsorship_required"
+        
+        return job, "stage2_passed"
+        
+    except Exception:
+        # On error, let job pass (don't lose jobs due to technical issues)
+        return job, "stage2_passed"
 
 def process_jobs_batch(jobs_batch):
-    """Process a batch of jobs in parallel"""
-    filtered_jobs = []
-    filter_counts = {"seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0, "passed": 0}
+    """Process jobs with optimized two-stage filtering"""
+    final_jobs = []
+    filter_counts = {
+        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
+        "stage1_passed": 0, "clearance_required": 0, 
+        "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
+    }
     
     if jobs_batch.empty:
-        return filtered_jobs, filter_counts
+        return final_jobs, filter_counts
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        future_to_job = {executor.submit(filter_job, job._asdict()): job for job in jobs_batch.itertuples()}
-        for future in concurrent.futures.as_completed(future_to_job):
-            job, reason = future.result()
-            filter_counts[reason] += 1
-            if job:
-                filtered_jobs.append(job)
-                SEEN_JOBS.add(job["job_url"])
-                save_seen_job(job["job_url"])
+    # Stage 1: Quick filtering (fast, no API calls)
+    stage1_jobs = []
+    for job in jobs_batch.itertuples():
+        job_dict = job._asdict()
+        filtered_job, reason = stage1_filter(job_dict)
+        filter_counts[reason] += 1
+        
+        if filtered_job:
+            stage1_jobs.append(filtered_job)
+            SEEN_JOBS.add(filtered_job["job_url"])
+
+    print(f"📊 Stage 1: {len(stage1_jobs)} jobs passed initial filtering")
+
+    # Stage 2: Deep filtering (parallel processing for speed)
+    linkedin_jobs = [job for job in stage1_jobs if "linkedin.com" in job.get("job_url", "")]
+    other_jobs = [job for job in stage1_jobs if "linkedin.com" not in job.get("job_url", "")]
     
-    return filtered_jobs, filter_counts
+    # Non-LinkedIn jobs skip deep filtering
+    final_jobs.extend(other_jobs)
+    
+    if linkedin_jobs:
+        # Limit jobs for speed (process first N jobs only)
+        jobs_to_process = linkedin_jobs[:MAX_STAGE2_JOBS]
+        if len(linkedin_jobs) > MAX_STAGE2_JOBS:
+            print(f"⚡ Speed optimization: Processing only first {MAX_STAGE2_JOBS} LinkedIn jobs")
+        
+        print(f"🔍 Stage 2: Deep filtering {len(jobs_to_process)} LinkedIn jobs in parallel...")
+        
+        # Parallel description fetching and filtering
+        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+            future_to_job = {executor.submit(stage2_filter_single, job): job for job in jobs_to_process}
+            
+            for future in concurrent.futures.as_completed(future_to_job, timeout=60):
+                try:
+                    filtered_job, reason = future.result()
+                    filter_counts[reason] += 1
+                    
+                    if filtered_job:
+                        final_jobs.append(filtered_job)
+                except Exception:
+                    # If individual job processing fails, add it anyway (don't lose jobs)
+                    job = future_to_job[future]
+                    final_jobs.append(job)
+                    filter_counts["stage2_passed"] += 1
+    
+    print(f"✅ Final: {len(final_jobs)} jobs passed all filters")
+    return final_jobs, filter_counts
 
-def post_to_slack(message, max_retries=3):
-    """Post to Slack with retry mechanism"""
-    if not SLACK_INTERN_URL:
-        print("❌ SLACK_INTERN environment variable not set")
+def post_to_slack(message, max_retries=2):
+    """Post message to Slack with retry logic"""
+    if not SLACK_TEST_URL:
+        print("⚠️ SLACK_TEST environment variable not set")
         return False
+        
+    # Slack webhook payload with CyberJobs Notifier branding
+    payload = {
+        "text": message,
+        "username": "CyberJobs Notifier",
+        "icon_emoji": ":bell:"
+    }
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(SLACK_INTERN_URL, json={"text": message})
+            response = requests.post(SLACK_TEST_URL, json=payload, timeout=10)
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
             print(f"❌ Slack API error (attempt {attempt + 1}): {e}")
             if attempt == max_retries - 1:
-                print(f"❌ Failed to send message to Slack after {max_retries} attempts")
+                print(f"❌ Failed to send to Slack after {max_retries} attempts")
                 return False
-            time.sleep(1 * (attempt + 1))  # Exponential backoff
+            time.sleep(1)
 
 def main():
+    """Main execution function"""
     # Debug: Check if Slack webhook is configured
-    if SLACK_INTERN_URL:
-        print(f"✅ Slack webhook configured (ends with: ...{SLACK_INTERN_URL[-10:]})")
+    if SLACK_TEST_URL:
+        print(f"✅ Slack webhook configured (ends with: ...{SLACK_TEST_URL[-10:]})")
     else:
-        print("❌ SLACK_INTERN environment variable not found!")
+        print("❌ SLACK_TEST environment variable not found!")
         return
-    
+        
+    start_time = time.time()
     load_seen_jobs()
     all_new_jobs = []
-    total_filter_counts = {"seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0, "passed": 0}
+    total_filter_counts = {
+        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
+        "stage1_passed": 0, "clearance_required": 0, 
+        "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
+    }
 
     try:
-        # Scrape jobs in parallel for each search term
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        print(f"🚀 Starting optimized job search at {datetime.now()}")
+        
+        # Parallel job scraping across search terms
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_to_term = {
                 executor.submit(
                     scrape_jobs,
                     site_name=PLATFORMS,
                     search_term=term,
                     location="United States",
-                    results_wanted=15,
-                    hours_old=1,
+                    results_wanted=100,  # Maximum coverage - catch everything posted
+                    hours_old=1,  # Only last hour for fresh jobs
                     experience_level=EXPERIENCE_LEVELS,
                     country_indeed="USA",
                     remote_only=False,
@@ -190,7 +412,8 @@ def main():
                 ): term for term in SEARCH_TERMS
             }
 
-            for future in concurrent.futures.as_completed(future_to_term):
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(future_to_term, timeout=180):
                 try:
                     jobs = future.result()
                     if not jobs.empty:
@@ -199,52 +422,59 @@ def main():
                         for key in total_filter_counts:
                             total_filter_counts[key] += counts[key]
                 except Exception as e:
-                    print(f"❌ Error scraping jobs: {e}")
+                    print(f"❌ Error scraping: {e}")
 
-        # Send results to Slack
+        # Send results to Slack with CyberJobs Notifier format
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        if not all_new_jobs:
-            message = f"🔍 No new cybersecurity internships/co-ops found in the last hour (as of {timestamp})."
-            post_to_slack(message)
-        else:
-            header = (
-                f"🎓 *New Cybersecurity Internships & Co-ops (fetched at {timestamp}):*\n"
-                f"📊 *Job Statistics:*\n"
-                f"• Total positions processed: {sum(total_filter_counts.values())}\n"
-                f"• Positions posted: {len(all_new_jobs)}\n"
-                f"• Positions filtered out:\n"
-                f"  - Already seen: {total_filter_counts['seen']}\n"
-                f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
-                f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
-                f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
-                f"  - Easy Apply: {total_filter_counts['easy_apply']}\n"
-                f"-------------------"
-            )
-            post_to_slack(header)
-            time.sleep(1)
-
+        # Calculate total jobs processed
+        total_processed = sum(total_filter_counts.values())
+        
+        # Create detailed statistics message
+        message = (
+            f":bell: *New Cybersecurity Jobs (fetched at {timestamp}):*\n"
+            f":bar_chart: *Job Statistics:*\n"
+            f"• Total jobs processed: {total_processed}\n"
+            f"• Jobs posted: {len(all_new_jobs)}\n"
+            f"• Jobs filtered out:\n"
+            f"  - Already seen: {total_filter_counts['seen']}\n"
+            f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
+            f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
+            f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
+            f"  - Security clearance: {total_filter_counts['clearance_required']}\n"
+            f"  - 3+ years experience: {total_filter_counts['experience_required']}\n"
+            f"  - Sponsorship restrictions: {total_filter_counts['sponsorship_required']}\n"
+            f"-------------------"
+        )
+        
+        # Send statistics first
+        post_to_slack(message)
+        
+        # Send individual job listings if any new jobs found
+        if all_new_jobs:
             for job in all_new_jobs:
-                posted_date = job.get("date_posted", "Unknown")
-                message = (
-                    f"🎓 *{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
-                    f"📍 {job.get('location', 'N/A')} | 🕐 Posted: {posted_date if posted_date else 'N/A'}\n"
-                    f"🔗 <{job.get('job_url', '')}> via {job.get('via', 'Unknown').capitalize()}"
+                job_message = (
+                    f"*{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
+                    f"📍 {job.get('location', 'N/A')} | 🕐 {job.get('date_posted', 'N/A')}\n"
+                    f"🔗 <{job.get('job_url', '')}|Apply Here>"
                 )
-                post_to_slack(message)
-                time.sleep(1)
+                post_to_slack(job_message)
+                time.sleep(0.5)  # Brief delay between messages
 
-        # Print console summary
-        print(f"✅ {len(all_new_jobs)} internships/co-ops posted to Slack.")
-        print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} positions filtered out.")
-
-        # Save all seen jobs at the end
+        # Save seen jobs
         save_seen_jobs()
+        
+        # Performance metrics
+        elapsed = time.time() - start_time
+        print(f"⚡ Completed in {elapsed:.1f} seconds")
+        print(f"✅ {len(all_new_jobs)} jobs posted to Slack")
+        print(f"📊 Deep filters: {total_filter_counts['clearance_required']} clearance, {total_filter_counts['experience_required']} experience, {total_filter_counts['sponsorship_required']} sponsorship")
+
+
     
     except Exception as e:
         print(f"❌ Error in main execution: {e}")
         raise
 
 if __name__ == "__main__":
-    main() 
-
+    main()
