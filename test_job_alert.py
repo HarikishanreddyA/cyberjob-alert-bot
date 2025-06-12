@@ -103,8 +103,48 @@ SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|vi
 
 # Stage 2 Filters (Deep filtering - requires full description)
 CLEARANCE_KEYWORDS = re.compile(r'security clearance|secret clearance|top secret|ts/sci|clearance required|government clearance|dod clearance|federal clearance|clearability|able to obtain clearance', re.I)
-EXPERIENCE_REJECT = re.compile(r'(?:(?:minimum|at least|requires?|must have)\s+(?:of\s+)?|(?:^|\s))(?:3\+?|three|four|4\+?|five|5\+?|six|6\+?|seven|7\+?|eight|8\+?|nine|9\+?|ten|10\+?|1[0-9]|2[0-9])\s*(?:\+)?\s*(?:years?|yrs?)\s*(?:of\s+)?(?:(?:non-internship\s+)?(?:professional\s+)?(?:software\s+)?(?:development\s+)?(?:design\s+)?(?:architecture\s+)?(?:experience|exp)|experience|exp)?(?!\s+(?:preferred|desired|plus|a plus|helpful|nice to have))', re.I)
+
+# Comprehensive experience regex to catch ALL edge cases
+EXPERIENCE_REJECT = re.compile(r'''
+    (?:
+        # Direct experience requirements
+        (?:minimum|min|at\s+least|requires?|must\s+have|need|needs?|looking\s+for|seeking|should\s+have|candidate\s+should|we\s+require|requires|prefer|preferably)\s+
+        (?:
+            # Patterns like "3+", "5-7", "4 to 12", "minimum 5", etc.
+            (?:3\+?|4\+?|5\+?|6\+?|7\+?|8\+?|9\+?|10\+?|1[1-9]|[2-9]\d)\s*(?:\+|plus)?\s*(?:years?|yrs?|y)
+            |
+            (?:3|4|5|6|7|8|9|10|1[1-9]|[2-9]\d)\s*(?:-|to|or\s+more|\s+to\s+)\s*(?:5|6|7|8|9|10|1[1-9]|[2-9]\d|more)\s*(?:years?|yrs?|y)
+            |
+            (?:three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen)\s+(?:years?|yrs?)
+            |
+            (?:3|4|5|6|7|8|9|10|1[1-9]|[2-9]\d)\s*(?:\+|plus)?\s*(?:years?|yrs?|y)\s+(?:of\s+)?(?:experience|exp|background|work)
+        )
+        |
+        # Patterns with experience first
+        (?:
+            (?:3\+?|4\+?|5\+?|6\+?|7\+?|8\+?|9\+?|10\+?|1[1-9]|[2-9]\d)\s*(?:\+|plus)?\s*(?:years?|yrs?|y)\s+
+            (?:of\s+)?(?:experience|exp|background)\s+(?:in|with|of|working)
+            |
+            (?:3|4|5|6|7|8|9|10|1[1-9]|[2-9]\d)\s*(?:-|to)\s*(?:5|6|7|8|9|10|1[1-9]|[2-9]\d)\s*(?:years?|yrs?|y)\s+
+            (?:of\s+)?(?:experience|exp|background)\s+(?:in|with|of|working)
+        )
+        |
+        # Alternative patterns
+        (?:
+            (?:experience|background|expertise)\s+(?:of\s+)?(?:at\s+least\s+)?(?:3\+?|4\+?|5\+?|6\+?|7\+?|8\+?|9\+?|10\+?|1[1-9]|[2-9]\d)\s*(?:\+|plus)?\s*(?:years?|yrs?)
+            |
+            (?:3\+?|4\+?|5\+?|6\+?|7\+?|8\+?|9\+?|10\+?|1[1-9]|[2-9]\d)\s*(?:\+|plus)?\s*(?:years?|yrs?)\s+(?:minimum|min|or\s+more)
+            |
+            (?:minimum|min)\s+of\s+(?:3|4|5|6|7|8|9|10|1[1-9]|[2-9]\d)\s*(?:\+)?\s*(?:years?|yrs?)
+        )
+    )
+    (?!\s*(?:preferred|desired|plus|a\s+plus|helpful|nice\s+to\s+have|would\s+be\s+nice|would\s+be\s+great|bonus|advantageous|ideal|good\s+to\s+have))
+''', re.I | re.VERBOSE)
+
 SPONSORSHIP_REJECT = re.compile(r'(?:no|not|does not|will not|cannot|unable to)\s+(?:provide|offer|sponsor)\s+(?:visa|sponsorship|work authorization)|us citizens only|must be (?:us citizen|authorized to work)|citizen.*required|no sponsorship|visa sponsorship not available|eligible to work (?:in|for) (?:us|usa)|must be legally authorized', re.I)
+
+# Easy Apply detection (add back to Stage 1 for faster filtering)
+EASY_APPLY_REJECT = re.compile(r'easy apply|quick apply|1-click apply|1 click apply|apply now|apply with your profile|apply with linkedin|one click|instant apply', re.I)
 
 # Cache seen jobs in memory
 SEEN_JOBS = set()
@@ -250,6 +290,11 @@ def stage1_filter(job):
     # Reject senior positions
     if REJECT_TITLE.search(title):
         return None, "title_reject"
+    
+    # Check for Easy Apply in basic description (faster filtering)
+    full_text = f"{title} {description}"
+    if EASY_APPLY_REJECT.search(full_text):
+        return None, "easy_apply"
 
     return job, "stage1_passed"
 
@@ -293,7 +338,7 @@ def process_jobs_batch(jobs_batch):
     """Process jobs with optimized two-stage filtering"""
     final_jobs = []
     filter_counts = {
-        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
+        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0,
         "stage1_passed": 0, "clearance_required": 0, 
         "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
     }
@@ -387,7 +432,7 @@ def main():
     load_seen_jobs()
     all_new_jobs = []
     total_filter_counts = {
-        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, 
+        "seen": 0, "source": 0, "title_keywords": 0, "title_reject": 0, "easy_apply": 0,
         "stage1_passed": 0, "clearance_required": 0, 
         "experience_required": 0, "sponsorship_required": 0, "stage2_passed": 0
     }
@@ -403,7 +448,7 @@ def main():
                     site_name=PLATFORMS,
                     search_term=term,
                     location="United States",
-                    results_wanted=100,  # Maximum coverage - catch everything posted
+                    results_wanted=30,  # Reduced for quality over quantity
                     hours_old=1,  # Only last hour for fresh jobs
                     experience_level=EXPERIENCE_LEVELS,
                     country_indeed="USA",
@@ -424,42 +469,49 @@ def main():
                 except Exception as e:
                     print(f"❌ Error scraping: {e}")
 
-        # Send results to Slack with CyberJobs Notifier format
+                # Send results to Slack as one grouped message
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
         # Calculate total jobs processed
         total_processed = sum(total_filter_counts.values())
         
-        # Create detailed statistics message
-        message = (
-            f":bell: *New Cybersecurity Jobs (fetched at {timestamp}):*\n"
-            f":bar_chart: *Job Statistics:*\n"
-            f"• Total jobs processed: {total_processed}\n"
-            f"• Jobs posted: {len(all_new_jobs)}\n"
-            f"• Jobs filtered out:\n"
-            f"  - Already seen: {total_filter_counts['seen']}\n"
-            f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
-            f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
-            f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
-            f"  - Security clearance: {total_filter_counts['clearance_required']}\n"
-            f"  - 3+ years experience: {total_filter_counts['experience_required']}\n"
-            f"  - Sponsorship restrictions: {total_filter_counts['sponsorship_required']}\n"
-            f"-------------------"
-        )
-        
-        # Send statistics first
-        post_to_slack(message)
-        
-        # Send individual job listings if any new jobs found
-        if all_new_jobs:
-            for job in all_new_jobs:
-                job_message = (
-                    f"*{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
-                    f"📍 {job.get('location', 'N/A')} | 🕐 {job.get('date_posted', 'N/A')}\n"
-                    f"🔗 <{job.get('job_url', '')}|Apply Here>"
+        # Build complete message with statistics and all jobs
+        if not all_new_jobs:
+            message = f"🔍 No new cybersecurity jobs found in the last hour (as of {timestamp})."
+        else:
+            # Start with header and statistics
+            message_parts = [
+                f":bell: *New Cybersecurity Jobs (fetched at {timestamp}):*",
+                f":bar_chart: *Job Statistics:*",
+                f"• Total jobs processed: {total_processed}",
+                f"• Jobs posted: {len(all_new_jobs)}",
+                f"• Jobs filtered out:",
+                f"  - Already seen: {total_filter_counts['seen']}",
+                f"  - Source (Dice/Lensa): {total_filter_counts['source']}",
+                f"  - Title mismatch: {total_filter_counts['title_keywords']}",
+                f"  - Senior/Manager: {total_filter_counts['title_reject']}",
+                f"  - Easy Apply: {total_filter_counts['easy_apply']}",
+                f"  - Security clearance: {total_filter_counts['clearance_required']}",
+                f"  - 3+ years experience: {total_filter_counts['experience_required']}",
+                f"  - Sponsorship restrictions: {total_filter_counts['sponsorship_required']}",
+                f"-------------------",
+                f"*📋 Job Listings:*"
+            ]
+            
+            # Add all job listings
+            for i, job in enumerate(all_new_jobs, 1):
+                job_entry = (
+                    f"\n{i}. *{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
+                    f"   📍 {job.get('location', 'N/A')} | 🕐 {job.get('date_posted', 'N/A')}\n"
+                    f"   🔗 <{job.get('job_url', '')}|Apply Here>"
                 )
-                post_to_slack(job_message)
-                time.sleep(0.5)  # Brief delay between messages
+                message_parts.append(job_entry)
+            
+            # Join all parts into one message
+            message = "\n".join(message_parts)
+        
+        # Send the complete message at once
+        post_to_slack(message)
 
         # Save seen jobs
         save_seen_jobs()
