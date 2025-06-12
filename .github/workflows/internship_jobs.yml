@@ -30,7 +30,7 @@ jobs:
       - name: Run job_alert.py
         env:
           SLACK_WEBHOOK_URL: ${{secrets.SLACK_INTERN}}
-        run: python job_alert.py
+        run: python internship_jobs.py
 
       - name: Commit and push changes
         run: |
