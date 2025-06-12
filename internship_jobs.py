@@ -13,7 +13,7 @@ SLACK_INTERN_URL = os.getenv("SLACK_INTERN")  # Matches env var name
 SEEN_JOBS_FILE = "seen_internship_jobs.json"  # Separate file for internships
 MAX_JOBS_TO_KEEP = 1000  # Keep last 1000 jobs to prevent file from growing too large
 
-# Internship-specific search configuration
+# Internship and Co-op specific search configuration
 SEARCH_TERMS = [
     "cybersecurity intern",
     "security intern", 
@@ -28,14 +28,24 @@ SEARCH_TERMS = [
     "SOC internship",
     "information security internship",
     "cyber intern",
-    "security engineering intern"
+    "security engineering intern",
+    "cybersecurity coop",
+    "security coop",
+    "cybersecurity co-op",
+    "security co-op",
+    "SOC coop",
+    "SOC co-op",
+    "information security coop",
+    "information security co-op",
+    "cyber coop",
+    "cyber co-op"
 ]
 
-EXPERIENCE_LEVELS = ["internship"]  # Only internships
+EXPERIENCE_LEVELS = ["internship"]  # JobSpy doesn't have separate "coop" level
 PLATFORMS = ["linkedin"]
 
-# Compile regex patterns for faster matching - internship optimized
-TITLE_KEYWORDS = re.compile(r'intern|internship|cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
+# Compile regex patterns for faster matching - internship and co-op optimized
+TITLE_KEYWORDS = re.compile(r'intern|internship|coop|co-op|cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
 # More lenient for internships - don't reject senior titles as harshly since some are "Senior Intern" positions
 REJECT_TITLE = re.compile(r'manager|lead|director|principal|architect|vp|vice president|chief|head of', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
@@ -92,12 +102,12 @@ def filter_job(job):
     if SOURCE_REJECT.search(source) or SOURCE_REJECT.search(description) or SOURCE_REJECT.search(company):
         return None, "source"
 
-    # For internships, we want to be more inclusive with keywords
-    # Check if it's explicitly an internship OR has security keywords
-    is_internship = bool(re.search(r'intern|internship', title, re.I))
+    # For internships and co-ops, we want to be more inclusive with keywords
+    # Check if it's explicitly an internship/co-op OR has security keywords
+    is_internship_or_coop = bool(re.search(r'intern|internship|coop|co-op', title, re.I))
     has_security_keywords = check_title_match(title)
     
-    if not (is_internship or has_security_keywords):
+    if not (is_internship_or_coop or has_security_keywords):
         return None, "title_keywords"
 
     # More lenient title rejection for internships
@@ -195,15 +205,15 @@ def main():
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
         if not all_new_jobs:
-            message = f"🔍 No new cybersecurity internships found in the last hour (as of {timestamp})."
+            message = f"🔍 No new cybersecurity internships/co-ops found in the last hour (as of {timestamp})."
             post_to_slack(message)
         else:
             header = (
-                f"🎓 *New Cybersecurity Internships (fetched at {timestamp}):*\n"
-                f"📊 *Internship Statistics:*\n"
-                f"• Total internships processed: {sum(total_filter_counts.values())}\n"
-                f"• Internships posted: {len(all_new_jobs)}\n"
-                f"• Internships filtered out:\n"
+                f"🎓 *New Cybersecurity Internships & Co-ops (fetched at {timestamp}):*\n"
+                f"📊 *Job Statistics:*\n"
+                f"• Total positions processed: {sum(total_filter_counts.values())}\n"
+                f"• Positions posted: {len(all_new_jobs)}\n"
+                f"• Positions filtered out:\n"
                 f"  - Already seen: {total_filter_counts['seen']}\n"
                 f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
                 f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
@@ -225,8 +235,8 @@ def main():
                 time.sleep(1)
 
         # Print console summary
-        print(f"✅ {len(all_new_jobs)} internships posted to Slack.")
-        print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} internships filtered out.")
+        print(f"✅ {len(all_new_jobs)} internships/co-ops posted to Slack.")
+        print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} positions filtered out.")
 
         # Save all seen jobs at the end
         save_seen_jobs()
