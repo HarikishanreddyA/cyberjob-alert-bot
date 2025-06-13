@@ -45,7 +45,7 @@ EXPERIENCE_LEVELS = ["internship"]  # JobSpy doesn't have separate "coop" level
 PLATFORMS = ["linkedin"]
 
 # Compile regex patterns for faster matching - internship and co-op optimized
-TITLE_KEYWORDS = re.compile(r'intern|internship|coop|co-op|cyber|security|soc|grc|infosec|threat|incident response|vulnerability|detection|cloud security|security analyst|security engineer|malware|siem|log analysis|risk|appsec|devsecops', re.I)
+TITLE_KEYWORDS = re.compile(r'security|cybersecurity|infosec|information security', re.I)
 # More lenient for internships - don't reject senior titles as harshly since some are "Senior Intern" positions
 REJECT_TITLE = re.compile(r'manager|lead|director|principal|architect|vp|vice president|chief|head of', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
@@ -107,6 +107,7 @@ def filter_job(job):
     is_internship_or_coop = bool(re.search(r'intern|internship|coop|co-op', title, re.I))
     has_security_keywords = check_title_match(title)
     
+    # Must be both an internship AND have security keywords
     if not (is_internship_or_coop and has_security_keywords):
         return None, "title_keywords"
 
