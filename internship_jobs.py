@@ -103,11 +103,11 @@ def filter_job(job):
         return None, "source"
 
     # For internships and co-ops, we want to be more inclusive with keywords
-    # Check if it's explicitly an internship/co-op OR has security keywords
+    # Check if it's explicitly an internship/co-op AND has security keywords
     is_internship_or_coop = bool(re.search(r'intern|internship|coop|co-op', title, re.I))
     has_security_keywords = check_title_match(title)
     
-    if not (is_internship_or_coop or has_security_keywords):
+    if not (is_internship_or_coop and has_security_keywords):
         return None, "title_keywords"
 
     # More lenient title rejection for internships
