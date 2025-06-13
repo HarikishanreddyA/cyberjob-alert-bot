@@ -160,6 +160,37 @@ def post_to_slack(message, max_retries=3):
                 return False
             time.sleep(1 * (attempt + 1))  # Exponential backoff
 
+def are_jobs_similar(job1, job2):
+    """Check if two jobs are essentially the same position"""
+    # Normalize titles and companies for comparison
+    title1 = str(job1.get('title', '')).lower()
+    title2 = str(job2.get('title', '')).lower()
+    company1 = str(job1.get('company', '')).lower()
+    company2 = str(job2.get('company', '')).lower()
+    
+    # Check if titles and companies are similar
+    title_similar = title1 == title2
+    company_similar = company1 == company2
+    
+    # If both title and company match, it's the same position
+    return title_similar and company_similar
+
+def deduplicate_jobs(jobs):
+    """Remove duplicate job postings, keeping only one instance of each position"""
+    unique_jobs = []
+    seen_positions = set()
+    
+    for job in jobs:
+        # Create a unique key for this position
+        position_key = f"{job.get('title', '').lower()}|{job.get('company', '').lower()}"
+        
+        # If we haven't seen this position before, add it
+        if position_key not in seen_positions:
+            seen_positions.add(position_key)
+            unique_jobs.append(job)
+    
+    return unique_jobs
+
 def main():
     # Debug: Check if Slack webhook is configured
     if SLACK_INTERN_URL:
@@ -201,41 +232,49 @@ def main():
                 except Exception as e:
                     print(f"❌ Error scraping jobs: {e}")
 
-        # Send results to Slack
+        # Deduplicate jobs before sending to Slack
+        all_new_jobs = deduplicate_jobs(all_new_jobs)
+
+        # Send results to Slack as one grouped message
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         
         if not all_new_jobs:
             message = f"🔍 No new cybersecurity internships/co-ops found in the last hour (as of {timestamp})."
-            post_to_slack(message)
         else:
-            header = (
-                f"🎓 *New Cybersecurity Internships & Co-ops (fetched at {timestamp}):*\n"
-                f"📊 *Job Statistics:*\n"
-                f"• Total positions processed: {sum(total_filter_counts.values())}\n"
-                f"• Positions posted: {len(all_new_jobs)}\n"
-                f"• Positions filtered out:\n"
-                f"  - Already seen: {total_filter_counts['seen']}\n"
-                f"  - Source (Dice/Lensa): {total_filter_counts['source']}\n"
-                f"  - Title mismatch: {total_filter_counts['title_keywords']}\n"
-                f"  - Senior/Manager: {total_filter_counts['title_reject']}\n"
-                f"  - Easy Apply: {total_filter_counts['easy_apply']}\n"
-                f"-------------------"
-            )
-            post_to_slack(header)
-            time.sleep(1)
-
-            for job in all_new_jobs:
+            # Build complete message with statistics and all jobs
+            message_parts = [
+                f"🎓 *New Cybersecurity Internships & Co-ops (fetched at {timestamp}):*",
+                f"📊 *Job Statistics:*",
+                f"• Total positions processed: {sum(total_filter_counts.values())}",
+                f"• Unique positions posted: {len(all_new_jobs)}",
+                f"• Positions filtered out:",
+                f"  - Already seen: {total_filter_counts['seen']}",
+                f"  - Source (Dice/Lensa): {total_filter_counts['source']}",
+                f"  - Title mismatch: {total_filter_counts['title_keywords']}",
+                f"  - Senior/Manager: {total_filter_counts['title_reject']}",
+                f"  - Easy Apply: {total_filter_counts['easy_apply']}",
+                f"-------------------",
+                f"*📋 Internship Listings:*"
+            ]
+            
+            # Add all job listings
+            for i, job in enumerate(all_new_jobs, 1):
                 posted_date = job.get("date_posted", "Unknown")
-                message = (
-                    f"🎓 *{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
-                    f"📍 {job.get('location', 'N/A')} | 🕐 Posted: {posted_date if posted_date else 'N/A'}\n"
-                    f"🔗 <{job.get('job_url', '')}> via {job.get('via', 'Unknown').capitalize()}"
+                job_entry = (
+                    f"\n{i}. *{job.get('title', 'No Title')}* at *{job.get('company', 'No Company')}*\n"
+                    f"   📍 {job.get('location', 'N/A')} | 🕐 Posted: {posted_date if posted_date else 'N/A'}\n"
+                    f"   🔗 <{job.get('job_url', '')}|Apply Here> via {job.get('via', 'Unknown').capitalize()}"
                 )
-                post_to_slack(message)
-                time.sleep(1)
+                message_parts.append(job_entry)
+            
+            # Join all parts into one message
+            message = "\n".join(message_parts)
+        
+        # Send the complete message at once
+        post_to_slack(message)
 
         # Print console summary
-        print(f"✅ {len(all_new_jobs)} internships/co-ops posted to Slack.")
+        print(f"✅ {len(all_new_jobs)} unique internships/co-ops posted to Slack.")
         print(f"🚫 {sum(total_filter_counts.values()) - len(all_new_jobs)} positions filtered out.")
 
         # Save all seen jobs at the end
