@@ -39,7 +39,7 @@ COMPANIES = ["Google", "Microsoft", "Amazon Web Services", "Cisco", "IBM", "Orac
     "Wayfair", "Shopify", "Chewy", "Zappos", "Overstock.com", "Rakuten", "Newegg", "ASOS", "Verizon Communications", "AT&T", "T-Mobile US", "Comcast", "Charter Communications",
     "Sprint Corporation", "CenturyLink", "Frontier Communications", "Windstream Holdings",
     "Cox Communications", "Altice USA", "Dish Network", "U.S. Cellular", "Shentel",
-    "Mediacom Communications", "RCN Corporation", "WOW! Internet, Cable & Phone",
+    "Mediacom Communications", "RCN Corporation", "WOW! Internet, Cable & Phone","Adobe", "Lyft",
     "Atlantic Broadband", "Blue Ridge Communications"]
 
 
