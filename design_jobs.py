@@ -22,7 +22,7 @@ import random
 from threading import Lock
 
 # Configuration
-SLACK_TEST_URL = os.getenv("SACK")  # Matches env var name
+SACK_URL = os.getenv("SACK")  # Matches env var name
 SEEN_JOBS_FILE = "seen_main_jobs.json"  # Separate file from internships
 MAX_JOBS_TO_KEEP = 1000
 MAX_STAGE2_JOBS = 50  # Increased for comprehensive filtering (was 20)
@@ -360,7 +360,7 @@ def process_jobs_batch(jobs_batch):
 
 def post_to_slack(message, max_retries=2):
     """Post message to Slack with retry logic"""
-    if not SLACK_TEST_URL:
+    if not SACK_URLL:
         print("⚠️ SLACK_TEST environment variable not set")
         return False
         
@@ -373,7 +373,7 @@ def post_to_slack(message, max_retries=2):
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(SLACK_TEST_URL, json=payload, timeout=10)
+            response = requests.post(SACK_URLL, json=payload, timeout=10)
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
@@ -386,8 +386,8 @@ def post_to_slack(message, max_retries=2):
 def main():
     """Main execution function"""
     # Debug: Check if Slack webhook is configured
-    if SLACK_TEST_URL:
-        print(f"✅ Slack webhook configured (ends with: ...{SLACK_TEST_URL[-10:]})")
+    if SACK_URLL:
+        print(f"✅ Slack webhook configured (ends with: ...{SACK_URLL[-10:]})")
     else:
         print("❌ SLACK_TEST environment variable not found!")
         return
