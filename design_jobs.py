@@ -360,7 +360,7 @@ def process_jobs_batch(jobs_batch):
 
 def post_to_slack(message, max_retries=2):
     """Post message to Slack with retry logic"""
-    if not SACK_URLL:
+    if not SACK_URL:
         print("⚠️ SLACK_TEST environment variable not set")
         return False
         
@@ -373,7 +373,7 @@ def post_to_slack(message, max_retries=2):
     
     for attempt in range(max_retries):
         try:
-            response = requests.post(SACK_URLL, json=payload, timeout=10)
+            response = requests.post(SACK_URL, json=payload, timeout=10)
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
@@ -386,8 +386,8 @@ def post_to_slack(message, max_retries=2):
 def main():
     """Main execution function"""
     # Debug: Check if Slack webhook is configured
-    if SACK_URLL:
-        print(f"✅ Slack webhook configured (ends with: ...{SACK_URLL[-10:]})")
+    if SACK_URL:
+        print(f"✅ Slack webhook configured (ends with: ...{SACK_URL[-10:]})")
     else:
         print("❌ SLACK_TEST environment variable not found!")
         return
