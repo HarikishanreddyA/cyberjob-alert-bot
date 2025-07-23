@@ -236,16 +236,14 @@ def main():
                 level = job.get("experience_level", "N/A").title()
                 posted = job.get("date_posted", "N/A")
                 url = job.get("job_url", "")
-                min_amt = job.get("min_amount")
-                max_amt = job.get("max_amount")
-                interval = job.get("interval", "yearly")
-                salary = f"${int(min_amt):,} – ${int(max_amt):,} / {interval}" if min_amt and max_amt else "Not listed"
+    
+               
 
                 messages.append(
                     f"{idx}️⃣ *{title}*\n"
                     f"📍 Location: {location}\n"
                     f"🧠 Level: {level}\n"
-                    f"💰 Salary: {salary}\n"
+                
                     f"🕐 Posted: {posted}\n"
                     f"🔗 <{url}>"
                 )
