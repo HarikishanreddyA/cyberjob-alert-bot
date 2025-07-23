@@ -22,7 +22,7 @@ import random
 from threading import Lock
 
 # Configuration
-SLACK_TEST_URL = os.getenv("SLACK_TEST")  # Matches env var name
+SLACK_TEST_URL = os.getenv("SACK")  # Matches env var name
 SEEN_JOBS_FILE = "seen_main_jobs.json"  # Separate file from internships
 MAX_JOBS_TO_KEEP = 1000
 MAX_STAGE2_JOBS = 50  # Increased for comprehensive filtering (was 20)
