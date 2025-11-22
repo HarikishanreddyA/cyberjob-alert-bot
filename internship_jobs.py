@@ -61,7 +61,8 @@ SEARCH_TERMS = [
     "statistical data scientist",
     "generative ai engineer",
     "optimization engineer",
-    "operations data analyst"
+    "operations data analyst",
+    "software engineer"
 ]
 
 EXPERIENCE_LEVELS = ["entry level", "internship", "associate"]
