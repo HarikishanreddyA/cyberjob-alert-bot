@@ -35,6 +35,7 @@ SEARCH_TERMS = [
     "machine learning engineer",
     "data analyst",
     "business data analyst",
+    "business analyst",
     "data architect",
     "bi developer",
     "analytics engineer",
@@ -71,7 +72,7 @@ PLATFORMS = ["linkedin"]
 
 # Stage 1 Filters (Quick filtering - no API calls)
 TITLE_KEYWORDS = re.compile(
-    r'data engineer|data scientist|machine learning engineer|ml engineer|ai engineer|mlops engineer|data analyst|business data analyst|analytics engineer|bi developer|data architect|big data engineer|cloud data engineer|applied data scientist|quantitative analyst|product data analyst|deep learning engineer|computer vision engineer|nlp engineer|data platform engineer|dataops engineer|data modeler|data quality engineer|data governance specialist|data visualization engineer|feature engineer|etl developer|ai research engineer|research data scientist|statistical data scientist|generative ai engineer|optimization engineer|software engineer|software developer|operations data analyst',
+    r'data engineer|data scientist|machine learning engineer|ml engineer|ai engineer|mlops engineer|data analyst|business data analyst|analytics engineer|bi developer|business analyst|data architect|big data engineer|cloud data engineer|applied data scientist|quantitative analyst|product data analyst|deep learning engineer|computer vision engineer|nlp engineer|data platform engineer|dataops engineer|data modeler|data quality engineer|data governance specialist|data visualization engineer|feature engineer|etl developer|ai research engineer|research data scientist|statistical data scientist|generative ai engineer|optimization engineer|software engineer|software developer|operations data analyst',
     re.I)
 REJECT_TITLE = re.compile(r'senior|sr\.|manager|lead|director|principal|architect|vp|vice president|chief|head of|operations manager', re.I)
 SOURCE_REJECT = re.compile(r'dice|lensa|jobs via dice|jobs via lensa|via dice|via lensa', re.I)
